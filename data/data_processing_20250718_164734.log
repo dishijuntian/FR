@@ -1,0 +1,29 @@
+2025-07-18 16:47:34 |     INFO | __main__ | 检测到 8 个文件不存在，开始处理数据...
+2025-07-18 16:47:34 |     INFO | __main__ | 缺失文件: ['train/train_segment_0.parquet', 'train/train_segment_1.parquet', 'train/train_segment_2.parquet', 'train/train_segment_3.parquet', 'test/test_segment_0.parquet', 'test/test_segment_1.parquet', 'test/test_segment_2.parquet', 'test/test_segment_3.parquet']
+2025-07-18 16:47:34 |     INFO | __main__ | ============================================================
+2025-07-18 16:47:34 |     INFO | __main__ | 开始处理训练数据
+2025-07-18 16:47:34 |     INFO | __main__ | ============================================================
+2025-07-18 16:47:34 |     INFO | __main__ | 开始处理 d:\kaggle\filght\data\train.parquet
+2025-07-18 16:47:34 |     INFO | __main__ | Parquet文件包含 18 个行组
+2025-07-18 16:47:34 |     INFO | __main__ | 处理行组 1/18
+2025-07-18 16:47:35 |     INFO | __main__ | 行组包含 8065 个唯一ranker_id
+2025-07-18 16:47:35 |     INFO | __main__ | 处理第 1 个chunk
+2025-07-18 16:47:35 |     INFO | __main__ | 处理chunk: 199995 行数据
+2025-07-18 16:47:35 |     INFO | __main__ | 保存 12030 行数据到 d:\kaggle\filght\data\train\train_segment_2.parquet
+2025-07-18 16:47:36 |     INFO | __main__ | segment_2: 处理了 73 个ranker_id, 剩余 187965 行待处理
+2025-07-18 16:47:36 |     INFO | __main__ | 保存 125866 行数据到 d:\kaggle\filght\data\train\train_segment_1.parquet
+2025-07-18 16:47:36 |     INFO | __main__ | segment_1: 处理了 1118 个ranker_id, 剩余 62099 行待处理
+2025-07-18 16:47:37 |     INFO | __main__ | 保存 62099 行数据到 d:\kaggle\filght\data\train\train_segment_0.parquet
+2025-07-18 16:47:37 |     INFO | __main__ | segment_0: 处理了 595 个ranker_id, 剩余 0 行待处理
+2025-07-18 16:47:37 |     INFO | __main__ | 处理第 2 个chunk
+2025-07-18 16:47:37 |     INFO | __main__ | 处理chunk: 199317 行数据
+2025-07-18 16:47:37 |     INFO | __main__ | 保存 11886 行数据到 d:\kaggle\filght\data\train\train_segment_2.parquet
+2025-07-18 16:47:37 |     INFO | __main__ | segment_2: 处理了 65 个ranker_id, 剩余 187431 行待处理
+2025-07-18 16:47:42 |     INFO | __main__ | 保存 117681 行数据到 d:\kaggle\filght\data\train\train_segment_1.parquet
+2025-07-18 16:47:42 |     INFO | __main__ | segment_1: 处理了 861 个ranker_id, 剩余 69750 行待处理
+2025-07-18 16:47:46 |     INFO | __main__ | 保存 69750 行数据到 d:\kaggle\filght\data\train\train_segment_0.parquet
+2025-07-18 16:47:46 |     INFO | __main__ | segment_0: 处理了 531 个ranker_id, 剩余 0 行待处理
+2025-07-18 16:47:46 |     INFO | __main__ | 处理第 3 个chunk
+2025-07-18 16:47:46 |     INFO | __main__ | 处理chunk: 199854 行数据
+2025-07-18 16:47:47 |     INFO | __main__ | 保存 15902 行数据到 d:\kaggle\filght\data\train\train_segment_2.parquet
+2025-07-18 16:47:47 |     INFO | __main__ | segment_2: 处理了 82 个ranker_id, 剩余 183952 行待处理
