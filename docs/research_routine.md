@@ -17,7 +17,7 @@
 * **主要文件** : `train.parquet`, `test.parquet`, `sample_submission.parquet`
 * **原始数据** : `jsons_raw.tar.kaggle` (15万个JSON文件，约50GB)
 * **关键标识符** : `ranker_id` (搜索会话分组变量)
-* **目标变量** : `selected` (训练集中为二进制，提交时为排名)
+* **目标变量** : `selected` (训练集中为二进制表示是否被选择，提交时为排名1,2,3...表示选择优先级)
 
 #### 1.2 数据探索任务
 

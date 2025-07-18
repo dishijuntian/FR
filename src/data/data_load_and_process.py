@@ -82,14 +82,15 @@ def analyze_group_distribution(df, group_col='ranker_id'):
         # 描述统计
         print("\n组大小描述统计:")
         print(group_sizes.describe())
-    #group_sizes.describe()​​：
-    # 计算并返回 group_sizes的描述统计信息，包括：
-    # count：非空值的数量。
-    # mean：平均值。
-    # std：标准差。
-    # min：最小值。
-    # 25%、50%（中位数）、75%：四分位数。
-    # max：最大值。
+        
+        # group_sizes.describe()​​：
+        # 计算并返回 group_sizes的描述统计信息，包括：
+        # count：非空值的数量。
+        # mean：平均值。
+        # std：标准差。
+        # min：最小值。
+        # 25%、50%（中位数）、75%：四分位数。
+        # max：最大值。
         # 可视化 - 使用对数尺度
         plt.figure(figsize=(10, 6))
         plt.hist(group_sizes, bins=50, log=True)
