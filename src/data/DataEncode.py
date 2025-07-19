@@ -297,9 +297,18 @@ class DataEncode:
 # 使用示例
 if __name__ == "__main__":
     encoder = DataEncode()
-    train_file_path = os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025/train.parquet")
-    test_file_path = os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025/test.parquet")
-    output_train_path = os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025/data_encoded/train_encoded.parquet")
-    output_test_path = os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025/data_encoded/test_encoded.parquet")
+    data_path =  os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025")
+    
+    train_file_path = os.path.join(data_path, "train.parquet")
+    test_file_path = os.path.join(data_path, "test.parquet")
+    
+    output_path = os.path.join(data_path, "data_encoded")
+    
+    if not os.path.exists(output_path):
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        
+    output_train_path = os.path.join(output_path, "train_encoded.parquet")
+    output_test_path = os.path.join(output_path, "test_encoded.parquet")
+    
     encoder.process_large_parquet(output_train_path, train_file_path)
     encoder.process_large_parquet(output_test_path, test_file_path)

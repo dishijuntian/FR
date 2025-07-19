@@ -405,10 +405,8 @@ def process_batch_worker(args):
 
 
 def main():
-    """主函数"""
-    target_output_dir = os.path.join(MAIN_PATH, "data")
     
-    # 目标文件列表（parquet格式）
+    target_output_dir = os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025")
     required_files = [
         "train/train_segment_0.parquet", "train/train_segment_1.parquet", 
         "train/train_segment_2.parquet", "train/train_segment_3.parquet",
@@ -435,8 +433,8 @@ def main():
         processor.logger.info(f"缺失文件: {missing_files}")
         
         # 检查输入文件是否存在
-        train_file = os.path.join(MAIN_PATH, "data", "train.parquet")
-        test_file = os.path.join(MAIN_PATH, "data", "test.parquet")
+        train_file = os.path.join(target_output_dir, "data_encoded/train_encoded.parquet")
+        test_file = os.path.join(target_output_dir, "data_encoded/test_encoded.parquet")
         
         if not os.path.exists(train_file):
             processor.logger.error(f"训练文件不存在: {train_file}")
