@@ -2,19 +2,17 @@ import pandas as pd
 import numpy as np
 import pyarrow.parquet as pq
 import os
-from datetime import datetime
-
-
-CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-MAIN_PATH = os.path.abspath(os.path.join(CURRENT_PATH, "..", ".."))
-os.chdir(MAIN_PATH)
-
+import gc
 
 class DataEncode:
-    def __init__(self):
-        pass
-
-
+    """数据编码处理类，负责特征工程和数据类型优化"""
+    
+    def __init__(self, logger=None):
+        self.logger = logger
+        
+        if self.logger:
+            self.logger.info("初始化DataEncode")
+    
     @staticmethod
     def parse_duration(duration_str):
         """更健壮的持续时间解析函数，处理多种格式"""
@@ -43,14 +41,11 @@ class DataEncode:
             return 0
 
     def optimize_data_types(self, df):
-        """
-        根据数据类型优化表转换数据类型
-        """
+        """根据数据类型优化表转换数据类型"""
         # 删除所有名称中含有segments3的列（不区分大小写）
         seg3_cols = [col for col in df.columns if 'segments3' in col.lower()]
         df.drop(columns=seg3_cols, inplace=True, errors='ignore')
         
-        # 数据类型转换
         # 1. 将double类型转换为int32/int8
         double_to_int_cols = [
             'legs1_segments2_baggageAllowance_weightMeasurementType',
@@ -92,13 +87,10 @@ class DataEncode:
         
         for col in double_to_int_cols:
             if col in df.columns:
-                # 先填充NaN为0（根据业务逻辑决定，可能需要其他填充方式）
                 df[col] = df[col].fillna(0)
-                # 转换为int32以节省内存
                 try:
                     df[col] = pd.to_numeric(df[col], downcast='integer')
                 except:
-                    # 如果转换失败，尝试先转换为float再转换为int
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('int32')
         
         # 2. 时间类型转换
@@ -124,7 +116,6 @@ class DataEncode:
         for col in time_cols:
             if col in df.columns:
                 try:
-                    # 处理时间戳
                     df[col] = pd.to_datetime(df[col], errors='coerce')
                     df[col] = (df[col] - pd.Timestamp("1970-01-01")) // pd.Timedelta('1s')
                     df[col] = pd.to_numeric(df[col], downcast='integer').fillna(0)
@@ -133,7 +124,6 @@ class DataEncode:
         
         for col in duration_cols:
             if col in df.columns:
-                # 使用更健壮的持续时间解析函数
                 df[col] = df[col].apply(self.parse_duration)
                 df[col] = pd.to_numeric(df[col], downcast='integer')
         
@@ -150,7 +140,6 @@ class DataEncode:
                 df[col] = df[col].astype('bool')
         
         # 4. 分类变量编码
-        # 对于searchRoute，检查是否包含"/"表示往返票
         if 'searchRoute' in df.columns:
             df['is_round_trip'] = df['searchRoute'].str.contains('/').fillna(False).astype('int8')
             df.drop(columns=['searchRoute'], inplace=True, errors='ignore')
@@ -170,7 +159,7 @@ class DataEncode:
             except:
                 df['totalPrice_bin'] = 0
         
-        # 6. 字符串分类变量
+        # 6. 字符串分类变量（哈希编码）
         str_cat_cols = [
             'frequentFlyer',
             'legs1_segments2_marketingCarrier_code',
@@ -219,11 +208,10 @@ class DataEncode:
         
         for col in str_cat_cols:
             if col in df.columns:
-                # 对于高基数的分类变量，使用哈希编码减少内存
                 df[col] = df[col].astype('str')
                 df[col] = df[col].apply(lambda x: hash(x) % 65535 if pd.notna(x) else 0).astype('int32')
         
-        # 7. 处理ranker_id和profileId
+        # 7. 处理ID类型字段
         if 'ranker_id' in df.columns:
             df['ranker_id'] = df['ranker_id'].apply(lambda x: hash(str(x)) % 65535).astype('int32')
         
@@ -239,46 +227,50 @@ class DataEncode:
         
         return df
 
-    def process_large_parquet(self,final_output_path, file_path, chunk_size=100000):
-        """
-        分块处理大型Parquet文件
-        """
-        # 首先读取schema
-        pf = pq.ParquetFile(file_path)
+    def process_file(self, input_file: str, output_file: str, chunk_size: int = 100000):
+        """分块处理单个Parquet文件进行编码"""
+        if self.logger:
+            self.logger.info(f"开始编码处理 {input_file}")
         
-        # 获取所有列名
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        
+        # 读取schema
+        pf = pq.ParquetFile(input_file)
         all_columns = pf.schema.names
         
         # 预先删除segments3的列
         columns_to_read = [col for col in all_columns if 'segments3' not in col.lower()]
         
-        # 创建输出目录
-        output_dir = os.path.join(os.path.dirname(file_path), 'processed')
-        os.makedirs(output_dir, exist_ok=True)
+        # 创建临时目录
+        temp_dir = os.path.join(os.path.dirname(output_file), 'temp_encode')
+        os.makedirs(temp_dir, exist_ok=True)
         
         # 分块处理
+        chunk_files = []
         for i, batch in enumerate(pf.iter_batches(batch_size=chunk_size, columns=columns_to_read)):
-            print(f"Processing chunk {i+1}")
+            if self.logger:
+                self.logger.info(f"编码处理chunk {i+1}")
+            
             df = batch.to_pandas()
             
             # 优化数据类型
             df = self.optimize_data_types(df)
             
             # 保存处理后的数据
-            output_path = os.path.join(output_dir, f'chunk_{i}.parquet')
-            df.to_parquet(output_path, index=False)
+            chunk_path = os.path.join(temp_dir, f'chunk_{i}.parquet')
+            df.to_parquet(chunk_path, index=False)
+            chunk_files.append(chunk_path)
             
             # 手动清理内存
             del df
-            import gc
             gc.collect()
         
-        print("All chunks processed. Now merging...")
+        if self.logger:
+            self.logger.info("所有chunks编码完成，开始合并...")
         
         # 合并所有分块
-        chunk_files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.startswith('chunk_')]
         df_list = []
-        
         for chunk_file in sorted(chunk_files, key=lambda x: int(x.split('_')[-1].split('.')[0])):
             df_chunk = pd.read_parquet(chunk_file)
             df_list.append(df_chunk)
@@ -286,29 +278,14 @@ class DataEncode:
         final_df = pd.concat(df_list, ignore_index=True)
         
         # 保存最终文件
-        final_df.to_parquet(final_output_path, index=False)
+        final_df.to_parquet(output_file, index=False)
+        if self.logger:
+            self.logger.info(f"编码完成: {output_file}, 共 {len(final_df)} 行")
         
         # 清理临时文件
         for chunk_file in chunk_files:
             os.remove(chunk_file)
-        os.rmdir(output_dir)
-
-
-# 使用示例
-if __name__ == "__main__":
-    encoder = DataEncode()
-    data_path =  os.path.join(MAIN_PATH, "data/aeroclub-recsys-2025")
-    
-    train_file_path = os.path.join(data_path, "train.parquet")
-    test_file_path = os.path.join(data_path, "test.parquet")
-    
-    output_path = os.path.join(data_path, "data_encoded")
-    
-    if not os.path.exists(output_path):
-        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        os.rmdir(temp_dir)
         
-    output_train_path = os.path.join(output_path, "train_encoded.parquet")
-    output_test_path = os.path.join(output_path, "test_encoded.parquet")
-    
-    encoder.process_large_parquet(output_train_path, train_file_path)
-    encoder.process_large_parquet(output_test_path, test_file_path)
+        del df_list, final_df
+        gc.collect()
