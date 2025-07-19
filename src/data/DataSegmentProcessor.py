@@ -451,6 +451,7 @@ def main():
         end_time = datetime.now()
         
         processor.logger.info(f"总处理时间: {end_time - start_time}")
+        processor.logger.info(f"总处理时间: {end_time - start_time}")
         processor.print_statistics()
 
 
