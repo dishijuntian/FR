@@ -102,11 +102,20 @@ class DataSegment:
     
     def _merge_temp_files(self, data_type: str, segment_level: int, temp_files: List[str], output_dir: str):
         """合并临时文件"""
-        if not temp_files:
-            return
-        
         final_filename = f"{data_type}_segment_{segment_level}.parquet"
         final_filepath = os.path.join(output_dir, final_filename)
+        
+        # 确保输出目录存在
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 如果没有临时文件，创建空文件
+        if not temp_files:
+            # 创建空DataFrame并保存
+            empty_df = pd.DataFrame()
+            empty_df.to_parquet(final_filepath, index=False)
+            if self.logger:
+                self.logger.info(f"创建空文件: {final_filepath}")
+            return
         
         # 读取所有临时文件并合并
         dfs = []
@@ -128,6 +137,12 @@ class DataSegment:
             combined_df.to_parquet(final_filepath, index=False)
             if self.logger:
                 self.logger.info(f"分割合并完成: {final_filepath}, 共 {len(combined_df)} 行")
+        else:
+            # 如果dfs为空（所有临时文件都不存在），创建空文件
+            empty_df = pd.DataFrame()
+            empty_df.to_parquet(final_filepath, index=False)
+            if self.logger:
+                self.logger.info(f"创建空文件（无临时数据）: {final_filepath}")
         
         # 清理内存
         del dfs
