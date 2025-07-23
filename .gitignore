@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 备份文件
 *~
 ..*~
@@ -14,3 +15,10 @@ __pycache__/
 # 确保 src/data 下的缓存被忽略，但保留该目录和 .py 文件
 src/**/__pycache__/
 src/**/*.pyc
+=======
+﻿data/
+
+!src/data/
+!src/data/**
+**/__pycache__
+>>>>>>> 32afd278a32d2b49d6aef271a96d7790e46b6726
