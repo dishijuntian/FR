@@ -1,5 +1,0 @@
-Model,Type,HitRate@3,NDCG@3,AUC,F1,Precision,Recall
-XGBRanker,Ranking,0.6990,0.5904,0.9664,0.0200,0.0101,0.9951
-LGBMRanker,Ranking,0.6843,0.5832,0.9557,0.0199,0.0101,0.9902
-XGBClassifier,Classification,0.6382,0.5246,0.9637,0.0344,0.6923,0.0176
-LGBMClassifier,Classification,0.6598,0.5423,0.9674,0.1517,0.4515,0.0912
