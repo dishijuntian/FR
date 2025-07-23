@@ -1,0 +1,337 @@
+2025-07-20 10:21:42 |     INFO | __main__ | 初始化DataSegment: 12 个进程, chunk_size=500000
+2025-07-20 10:21:42 |     INFO | __main__ | 初始化DataEncode
+2025-07-20 10:21:42 |     INFO | __main__ | 初始化DataProcessor: base_dir=data/aeroclub-recsys-2025, chunk_size=500000, n_processes=12
+2025-07-20 10:21:42 |     INFO | __main__ | 开始数据处理流水线
+2025-07-20 10:21:42 |     INFO | __main__ | 源数据目录: data/aeroclub-recsys-2025
+2025-07-20 10:21:42 |     INFO | __main__ | 分割输出目录: data/aeroclub-recsys-2025\segment
+2025-07-20 10:21:42 |     INFO | __main__ | 编码输出目录: data/aeroclub-recsys-2025\encode
+2025-07-20 10:21:42 |     INFO | __main__ | ============================================================
+2025-07-20 10:21:42 |     INFO | __main__ | 第一阶段：数据分割处理
+2025-07-20 10:21:42 |     INFO | __main__ | ============================================================
+2025-07-20 10:21:42 |     INFO | __main__ | 发现 8 个分割文件缺失，开始分割处理...
+2025-07-20 10:21:42 |     INFO | __main__ | 处理训练数据分割...
+2025-07-20 10:21:42 |     INFO | __main__ | 开始分割处理 data/aeroclub-recsys-2025\train.parquet
+2025-07-20 10:21:42 |     INFO | __main__ | 创建了 18 个批次
+2025-07-20 10:21:42 |     INFO | __main__ | 处理 segment_3 级别数据...
+2025-07-20 10:22:29 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\train\train_segment_3.parquet, 共 547 行
+2025-07-20 10:22:29 |     INFO | __main__ | segment_3 处理完成, 累计处理 7 个ranker_id
+2025-07-20 10:22:29 |     INFO | __main__ | 处理 segment_2 级别数据...
+2025-07-20 10:23:40 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\train\train_segment_2.parquet, 共 1120750 行
+2025-07-20 10:23:40 |     INFO | __main__ | segment_2 处理完成, 累计处理 5659 个ranker_id
+2025-07-20 10:23:40 |     INFO | __main__ | 处理 segment_1 级别数据...
+2025-07-20 10:28:03 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\train\train_segment_1.parquet, 共 10897167 行
+2025-07-20 10:28:05 |     INFO | __main__ | segment_1 处理完成, 累计处理 77914 个ranker_id
+2025-07-20 10:28:05 |     INFO | __main__ | 处理 segment_0 级别数据...
+2025-07-20 10:31:15 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\train\train_segment_0.parquet, 共 6126014 行
+2025-07-20 10:31:16 |     INFO | __main__ | segment_0 处理完成, 累计处理 105539 个ranker_id
+2025-07-20 10:31:16 |     INFO | __main__ | 完成分割 data/aeroclub-recsys-2025\train.parquet, 总计处理 105539 个ranker_id
+2025-07-20 10:31:16 |     INFO | __main__ | 处理测试数据分割...
+2025-07-20 10:31:16 |     INFO | __main__ | 开始分割处理 data/aeroclub-recsys-2025\test.parquet
+2025-07-20 10:31:16 |     INFO | __main__ | 创建了 7 个批次
+2025-07-20 10:31:16 |     INFO | __main__ | 处理 segment_3 级别数据...
+2025-07-20 10:31:35 |     INFO | __main__ | 创建空文件: data/aeroclub-recsys-2025\segment\test\test_segment_3.parquet
+2025-07-20 10:31:35 |     INFO | __main__ | segment_3 处理完成, 累计处理 0 个ranker_id
+2025-07-20 10:31:35 |     INFO | __main__ | 处理 segment_2 级别数据...
+2025-07-20 10:32:00 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\test\test_segment_2.parquet, 共 358948 行
+2025-07-20 10:32:01 |     INFO | __main__ | segment_2 处理完成, 累计处理 2014 个ranker_id
+2025-07-20 10:32:01 |     INFO | __main__ | 处理 segment_1 级别数据...
+2025-07-20 10:33:41 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\test\test_segment_1.parquet, 共 4107121 行
+2025-07-20 10:33:42 |     INFO | __main__ | segment_1 处理完成, 累计处理 35129 个ranker_id
+2025-07-20 10:33:42 |     INFO | __main__ | 处理 segment_0 级别数据...
+2025-07-20 10:34:57 |     INFO | __main__ | 分割合并完成: data/aeroclub-recsys-2025\segment\test\test_segment_0.parquet, 共 2427225 行
+2025-07-20 10:34:58 |     INFO | __main__ | segment_0 处理完成, 累计处理 45231 个ranker_id
+2025-07-20 10:34:58 |     INFO | __main__ | 完成分割 data/aeroclub-recsys-2025\test.parquet, 总计处理 45231 个ranker_id
+2025-07-20 10:34:58 |     INFO | __main__ | 分割阶段完成，耗时: 0:13:15.350977
+2025-07-20 10:34:58 |     INFO | __main__ | ============================================================
+2025-07-20 10:34:58 |     INFO | __main__ | 第二阶段：数据编码处理
+2025-07-20 10:34:58 |     INFO | __main__ | ============================================================
+2025-07-20 10:34:58 |     INFO | __main__ | 发现 8 个编码文件缺失，开始编码处理...
+2025-07-20 10:34:58 |     INFO | __main__ | 编码处理: train_segment_0
+2025-07-20 10:34:58 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\train\train_segment_0.parquet
+2025-07-20 10:34:58 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:35:01 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:35:05 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:35:08 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:35:11 |     INFO | __main__ | 编码处理chunk 5
+2025-07-20 10:35:15 |     INFO | __main__ | 编码处理chunk 6
+2025-07-20 10:35:18 |     INFO | __main__ | 编码处理chunk 7
+2025-07-20 10:35:21 |     INFO | __main__ | 编码处理chunk 8
+2025-07-20 10:35:25 |     INFO | __main__ | 编码处理chunk 9
+2025-07-20 10:35:28 |     INFO | __main__ | 编码处理chunk 10
+2025-07-20 10:35:32 |     INFO | __main__ | 编码处理chunk 11
+2025-07-20 10:35:35 |     INFO | __main__ | 编码处理chunk 12
+2025-07-20 10:35:38 |     INFO | __main__ | 编码处理chunk 13
+2025-07-20 10:35:41 |     INFO | __main__ | 编码处理chunk 14
+2025-07-20 10:35:45 |     INFO | __main__ | 编码处理chunk 15
+2025-07-20 10:35:48 |     INFO | __main__ | 编码处理chunk 16
+2025-07-20 10:35:51 |     INFO | __main__ | 编码处理chunk 17
+2025-07-20 10:35:55 |     INFO | __main__ | 编码处理chunk 18
+2025-07-20 10:35:58 |     INFO | __main__ | 编码处理chunk 19
+2025-07-20 10:36:02 |     INFO | __main__ | 编码处理chunk 20
+2025-07-20 10:36:05 |     INFO | __main__ | 编码处理chunk 21
+2025-07-20 10:36:08 |     INFO | __main__ | 编码处理chunk 22
+2025-07-20 10:36:12 |     INFO | __main__ | 编码处理chunk 23
+2025-07-20 10:36:15 |     INFO | __main__ | 编码处理chunk 24
+2025-07-20 10:36:18 |     INFO | __main__ | 编码处理chunk 25
+2025-07-20 10:36:22 |     INFO | __main__ | 编码处理chunk 26
+2025-07-20 10:36:25 |     INFO | __main__ | 编码处理chunk 27
+2025-07-20 10:36:28 |     INFO | __main__ | 编码处理chunk 28
+2025-07-20 10:36:32 |     INFO | __main__ | 编码处理chunk 29
+2025-07-20 10:36:35 |     INFO | __main__ | 编码处理chunk 30
+2025-07-20 10:36:38 |     INFO | __main__ | 编码处理chunk 31
+2025-07-20 10:36:41 |     INFO | __main__ | 编码处理chunk 32
+2025-07-20 10:36:45 |     INFO | __main__ | 编码处理chunk 33
+2025-07-20 10:36:48 |     INFO | __main__ | 编码处理chunk 34
+2025-07-20 10:36:51 |     INFO | __main__ | 编码处理chunk 35
+2025-07-20 10:36:54 |     INFO | __main__ | 编码处理chunk 36
+2025-07-20 10:36:58 |     INFO | __main__ | 编码处理chunk 37
+2025-07-20 10:37:01 |     INFO | __main__ | 编码处理chunk 38
+2025-07-20 10:37:04 |     INFO | __main__ | 编码处理chunk 39
+2025-07-20 10:37:07 |     INFO | __main__ | 编码处理chunk 40
+2025-07-20 10:37:11 |     INFO | __main__ | 编码处理chunk 41
+2025-07-20 10:37:14 |     INFO | __main__ | 编码处理chunk 42
+2025-07-20 10:37:17 |     INFO | __main__ | 编码处理chunk 43
+2025-07-20 10:37:20 |     INFO | __main__ | 编码处理chunk 44
+2025-07-20 10:37:24 |     INFO | __main__ | 编码处理chunk 45
+2025-07-20 10:37:27 |     INFO | __main__ | 编码处理chunk 46
+2025-07-20 10:37:30 |     INFO | __main__ | 编码处理chunk 47
+2025-07-20 10:37:33 |     INFO | __main__ | 编码处理chunk 48
+2025-07-20 10:37:36 |     INFO | __main__ | 编码处理chunk 49
+2025-07-20 10:37:40 |     INFO | __main__ | 编码处理chunk 50
+2025-07-20 10:37:43 |     INFO | __main__ | 编码处理chunk 51
+2025-07-20 10:37:46 |     INFO | __main__ | 编码处理chunk 52
+2025-07-20 10:37:49 |     INFO | __main__ | 编码处理chunk 53
+2025-07-20 10:37:53 |     INFO | __main__ | 编码处理chunk 54
+2025-07-20 10:37:56 |     INFO | __main__ | 编码处理chunk 55
+2025-07-20 10:37:59 |     INFO | __main__ | 编码处理chunk 56
+2025-07-20 10:38:03 |     INFO | __main__ | 编码处理chunk 57
+2025-07-20 10:38:06 |     INFO | __main__ | 编码处理chunk 58
+2025-07-20 10:38:09 |     INFO | __main__ | 编码处理chunk 59
+2025-07-20 10:38:13 |     INFO | __main__ | 编码处理chunk 60
+2025-07-20 10:38:16 |     INFO | __main__ | 编码处理chunk 61
+2025-07-20 10:38:19 |     INFO | __main__ | 编码处理chunk 62
+2025-07-20 10:38:20 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:38:28 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\train\train_segment_0_encoded.parquet, 共 6126014 行
+2025-07-20 10:38:28 |     INFO | __main__ | 编码处理: train_segment_1
+2025-07-20 10:38:28 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\train\train_segment_1.parquet
+2025-07-20 10:38:28 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:38:32 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:38:35 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:38:38 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:38:42 |     INFO | __main__ | 编码处理chunk 5
+2025-07-20 10:38:45 |     INFO | __main__ | 编码处理chunk 6
+2025-07-20 10:38:48 |     INFO | __main__ | 编码处理chunk 7
+2025-07-20 10:38:52 |     INFO | __main__ | 编码处理chunk 8
+2025-07-20 10:38:55 |     INFO | __main__ | 编码处理chunk 9
+2025-07-20 10:38:58 |     INFO | __main__ | 编码处理chunk 10
+2025-07-20 10:39:01 |     INFO | __main__ | 编码处理chunk 11
+2025-07-20 10:39:05 |     INFO | __main__ | 编码处理chunk 12
+2025-07-20 10:39:08 |     INFO | __main__ | 编码处理chunk 13
+2025-07-20 10:39:11 |     INFO | __main__ | 编码处理chunk 14
+2025-07-20 10:39:15 |     INFO | __main__ | 编码处理chunk 15
+2025-07-20 10:39:18 |     INFO | __main__ | 编码处理chunk 16
+2025-07-20 10:39:21 |     INFO | __main__ | 编码处理chunk 17
+2025-07-20 10:39:25 |     INFO | __main__ | 编码处理chunk 18
+2025-07-20 10:39:28 |     INFO | __main__ | 编码处理chunk 19
+2025-07-20 10:39:31 |     INFO | __main__ | 编码处理chunk 20
+2025-07-20 10:39:34 |     INFO | __main__ | 编码处理chunk 21
+2025-07-20 10:39:38 |     INFO | __main__ | 编码处理chunk 22
+2025-07-20 10:39:41 |     INFO | __main__ | 编码处理chunk 23
+2025-07-20 10:39:44 |     INFO | __main__ | 编码处理chunk 24
+2025-07-20 10:39:47 |     INFO | __main__ | 编码处理chunk 25
+2025-07-20 10:39:51 |     INFO | __main__ | 编码处理chunk 26
+2025-07-20 10:39:54 |     INFO | __main__ | 编码处理chunk 27
+2025-07-20 10:39:57 |     INFO | __main__ | 编码处理chunk 28
+2025-07-20 10:40:01 |     INFO | __main__ | 编码处理chunk 29
+2025-07-20 10:40:04 |     INFO | __main__ | 编码处理chunk 30
+2025-07-20 10:40:07 |     INFO | __main__ | 编码处理chunk 31
+2025-07-20 10:40:10 |     INFO | __main__ | 编码处理chunk 32
+2025-07-20 10:40:14 |     INFO | __main__ | 编码处理chunk 33
+2025-07-20 10:40:17 |     INFO | __main__ | 编码处理chunk 34
+2025-07-20 10:40:20 |     INFO | __main__ | 编码处理chunk 35
+2025-07-20 10:40:24 |     INFO | __main__ | 编码处理chunk 36
+2025-07-20 10:40:27 |     INFO | __main__ | 编码处理chunk 37
+2025-07-20 10:40:30 |     INFO | __main__ | 编码处理chunk 38
+2025-07-20 10:40:34 |     INFO | __main__ | 编码处理chunk 39
+2025-07-20 10:40:37 |     INFO | __main__ | 编码处理chunk 40
+2025-07-20 10:40:40 |     INFO | __main__ | 编码处理chunk 41
+2025-07-20 10:40:43 |     INFO | __main__ | 编码处理chunk 42
+2025-07-20 10:40:47 |     INFO | __main__ | 编码处理chunk 43
+2025-07-20 10:40:50 |     INFO | __main__ | 编码处理chunk 44
+2025-07-20 10:40:53 |     INFO | __main__ | 编码处理chunk 45
+2025-07-20 10:40:56 |     INFO | __main__ | 编码处理chunk 46
+2025-07-20 10:41:00 |     INFO | __main__ | 编码处理chunk 47
+2025-07-20 10:41:03 |     INFO | __main__ | 编码处理chunk 48
+2025-07-20 10:41:06 |     INFO | __main__ | 编码处理chunk 49
+2025-07-20 10:41:10 |     INFO | __main__ | 编码处理chunk 50
+2025-07-20 10:41:13 |     INFO | __main__ | 编码处理chunk 51
+2025-07-20 10:41:16 |     INFO | __main__ | 编码处理chunk 52
+2025-07-20 10:41:20 |     INFO | __main__ | 编码处理chunk 53
+2025-07-20 10:41:23 |     INFO | __main__ | 编码处理chunk 54
+2025-07-20 10:41:27 |     INFO | __main__ | 编码处理chunk 55
+2025-07-20 10:41:30 |     INFO | __main__ | 编码处理chunk 56
+2025-07-20 10:41:33 |     INFO | __main__ | 编码处理chunk 57
+2025-07-20 10:41:37 |     INFO | __main__ | 编码处理chunk 58
+2025-07-20 10:41:40 |     INFO | __main__ | 编码处理chunk 59
+2025-07-20 10:41:43 |     INFO | __main__ | 编码处理chunk 60
+2025-07-20 10:41:47 |     INFO | __main__ | 编码处理chunk 61
+2025-07-20 10:41:50 |     INFO | __main__ | 编码处理chunk 62
+2025-07-20 10:41:53 |     INFO | __main__ | 编码处理chunk 63
+2025-07-20 10:41:56 |     INFO | __main__ | 编码处理chunk 64
+2025-07-20 10:42:00 |     INFO | __main__ | 编码处理chunk 65
+2025-07-20 10:42:03 |     INFO | __main__ | 编码处理chunk 66
+2025-07-20 10:42:06 |     INFO | __main__ | 编码处理chunk 67
+2025-07-20 10:42:10 |     INFO | __main__ | 编码处理chunk 68
+2025-07-20 10:42:13 |     INFO | __main__ | 编码处理chunk 69
+2025-07-20 10:42:16 |     INFO | __main__ | 编码处理chunk 70
+2025-07-20 10:42:20 |     INFO | __main__ | 编码处理chunk 71
+2025-07-20 10:42:23 |     INFO | __main__ | 编码处理chunk 72
+2025-07-20 10:42:26 |     INFO | __main__ | 编码处理chunk 73
+2025-07-20 10:42:29 |     INFO | __main__ | 编码处理chunk 74
+2025-07-20 10:42:33 |     INFO | __main__ | 编码处理chunk 75
+2025-07-20 10:42:36 |     INFO | __main__ | 编码处理chunk 76
+2025-07-20 10:42:39 |     INFO | __main__ | 编码处理chunk 77
+2025-07-20 10:42:43 |     INFO | __main__ | 编码处理chunk 78
+2025-07-20 10:42:46 |     INFO | __main__ | 编码处理chunk 79
+2025-07-20 10:42:49 |     INFO | __main__ | 编码处理chunk 80
+2025-07-20 10:42:53 |     INFO | __main__ | 编码处理chunk 81
+2025-07-20 10:42:56 |     INFO | __main__ | 编码处理chunk 82
+2025-07-20 10:42:59 |     INFO | __main__ | 编码处理chunk 83
+2025-07-20 10:43:03 |     INFO | __main__ | 编码处理chunk 84
+2025-07-20 10:43:06 |     INFO | __main__ | 编码处理chunk 85
+2025-07-20 10:43:09 |     INFO | __main__ | 编码处理chunk 86
+2025-07-20 10:43:12 |     INFO | __main__ | 编码处理chunk 87
+2025-07-20 10:43:16 |     INFO | __main__ | 编码处理chunk 88
+2025-07-20 10:43:19 |     INFO | __main__ | 编码处理chunk 89
+2025-07-20 10:43:22 |     INFO | __main__ | 编码处理chunk 90
+2025-07-20 10:43:25 |     INFO | __main__ | 编码处理chunk 91
+2025-07-20 10:43:28 |     INFO | __main__ | 编码处理chunk 92
+2025-07-20 10:43:32 |     INFO | __main__ | 编码处理chunk 93
+2025-07-20 10:43:35 |     INFO | __main__ | 编码处理chunk 94
+2025-07-20 10:43:38 |     INFO | __main__ | 编码处理chunk 95
+2025-07-20 10:43:41 |     INFO | __main__ | 编码处理chunk 96
+2025-07-20 10:43:45 |     INFO | __main__ | 编码处理chunk 97
+2025-07-20 10:43:48 |     INFO | __main__ | 编码处理chunk 98
+2025-07-20 10:43:51 |     INFO | __main__ | 编码处理chunk 99
+2025-07-20 10:43:54 |     INFO | __main__ | 编码处理chunk 100
+2025-07-20 10:43:58 |     INFO | __main__ | 编码处理chunk 101
+2025-07-20 10:44:01 |     INFO | __main__ | 编码处理chunk 102
+2025-07-20 10:44:04 |     INFO | __main__ | 编码处理chunk 103
+2025-07-20 10:44:08 |     INFO | __main__ | 编码处理chunk 104
+2025-07-20 10:44:11 |     INFO | __main__ | 编码处理chunk 105
+2025-07-20 10:44:14 |     INFO | __main__ | 编码处理chunk 106
+2025-07-20 10:44:18 |     INFO | __main__ | 编码处理chunk 107
+2025-07-20 10:44:21 |     INFO | __main__ | 编码处理chunk 108
+2025-07-20 10:44:24 |     INFO | __main__ | 编码处理chunk 109
+2025-07-20 10:44:28 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:44:42 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\train\train_segment_1_encoded.parquet, 共 10897167 行
+2025-07-20 10:44:42 |     INFO | __main__ | 编码处理: train_segment_2
+2025-07-20 10:44:42 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\train\train_segment_2.parquet
+2025-07-20 10:44:43 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:44:46 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:44:49 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:44:53 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:44:56 |     INFO | __main__ | 编码处理chunk 5
+2025-07-20 10:44:59 |     INFO | __main__ | 编码处理chunk 6
+2025-07-20 10:45:03 |     INFO | __main__ | 编码处理chunk 7
+2025-07-20 10:45:06 |     INFO | __main__ | 编码处理chunk 8
+2025-07-20 10:45:09 |     INFO | __main__ | 编码处理chunk 9
+2025-07-20 10:45:13 |     INFO | __main__ | 编码处理chunk 10
+2025-07-20 10:45:16 |     INFO | __main__ | 编码处理chunk 11
+2025-07-20 10:45:19 |     INFO | __main__ | 编码处理chunk 12
+2025-07-20 10:45:20 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:45:22 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\train\train_segment_2_encoded.parquet, 共 1120750 行
+2025-07-20 10:45:22 |     INFO | __main__ | 编码处理: train_segment_3
+2025-07-20 10:45:22 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\train\train_segment_3.parquet
+2025-07-20 10:45:22 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:45:22 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:45:22 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\train\train_segment_3_encoded.parquet, 共 547 行
+2025-07-20 10:45:22 |     INFO | __main__ | 编码处理: test_segment_0
+2025-07-20 10:45:22 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\test\test_segment_0.parquet
+2025-07-20 10:45:22 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:45:26 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:45:30 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:45:33 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:45:36 |     INFO | __main__ | 编码处理chunk 5
+2025-07-20 10:45:39 |     INFO | __main__ | 编码处理chunk 6
+2025-07-20 10:45:43 |     INFO | __main__ | 编码处理chunk 7
+2025-07-20 10:45:46 |     INFO | __main__ | 编码处理chunk 8
+2025-07-20 10:45:49 |     INFO | __main__ | 编码处理chunk 9
+2025-07-20 10:45:53 |     INFO | __main__ | 编码处理chunk 10
+2025-07-20 10:45:56 |     INFO | __main__ | 编码处理chunk 11
+2025-07-20 10:45:59 |     INFO | __main__ | 编码处理chunk 12
+2025-07-20 10:46:02 |     INFO | __main__ | 编码处理chunk 13
+2025-07-20 10:46:06 |     INFO | __main__ | 编码处理chunk 14
+2025-07-20 10:46:09 |     INFO | __main__ | 编码处理chunk 15
+2025-07-20 10:46:12 |     INFO | __main__ | 编码处理chunk 16
+2025-07-20 10:46:15 |     INFO | __main__ | 编码处理chunk 17
+2025-07-20 10:46:19 |     INFO | __main__ | 编码处理chunk 18
+2025-07-20 10:46:22 |     INFO | __main__ | 编码处理chunk 19
+2025-07-20 10:46:25 |     INFO | __main__ | 编码处理chunk 20
+2025-07-20 10:46:28 |     INFO | __main__ | 编码处理chunk 21
+2025-07-20 10:46:32 |     INFO | __main__ | 编码处理chunk 22
+2025-07-20 10:46:35 |     INFO | __main__ | 编码处理chunk 23
+2025-07-20 10:46:38 |     INFO | __main__ | 编码处理chunk 24
+2025-07-20 10:46:42 |     INFO | __main__ | 编码处理chunk 25
+2025-07-20 10:46:43 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:46:46 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\test\test_segment_0_encoded.parquet, 共 2427225 行
+2025-07-20 10:46:46 |     INFO | __main__ | 编码处理: test_segment_1
+2025-07-20 10:46:46 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\test\test_segment_1.parquet
+2025-07-20 10:46:46 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:46:49 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:46:52 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:46:56 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:46:59 |     INFO | __main__ | 编码处理chunk 5
+2025-07-20 10:47:02 |     INFO | __main__ | 编码处理chunk 6
+2025-07-20 10:47:06 |     INFO | __main__ | 编码处理chunk 7
+2025-07-20 10:47:09 |     INFO | __main__ | 编码处理chunk 8
+2025-07-20 10:47:12 |     INFO | __main__ | 编码处理chunk 9
+2025-07-20 10:47:16 |     INFO | __main__ | 编码处理chunk 10
+2025-07-20 10:47:19 |     INFO | __main__ | 编码处理chunk 11
+2025-07-20 10:47:23 |     INFO | __main__ | 编码处理chunk 12
+2025-07-20 10:47:26 |     INFO | __main__ | 编码处理chunk 13
+2025-07-20 10:47:29 |     INFO | __main__ | 编码处理chunk 14
+2025-07-20 10:47:33 |     INFO | __main__ | 编码处理chunk 15
+2025-07-20 10:47:36 |     INFO | __main__ | 编码处理chunk 16
+2025-07-20 10:47:40 |     INFO | __main__ | 编码处理chunk 17
+2025-07-20 10:47:43 |     INFO | __main__ | 编码处理chunk 18
+2025-07-20 10:47:46 |     INFO | __main__ | 编码处理chunk 19
+2025-07-20 10:47:50 |     INFO | __main__ | 编码处理chunk 20
+2025-07-20 10:47:53 |     INFO | __main__ | 编码处理chunk 21
+2025-07-20 10:47:56 |     INFO | __main__ | 编码处理chunk 22
+2025-07-20 10:48:00 |     INFO | __main__ | 编码处理chunk 23
+2025-07-20 10:48:03 |     INFO | __main__ | 编码处理chunk 24
+2025-07-20 10:48:07 |     INFO | __main__ | 编码处理chunk 25
+2025-07-20 10:48:10 |     INFO | __main__ | 编码处理chunk 26
+2025-07-20 10:48:13 |     INFO | __main__ | 编码处理chunk 27
+2025-07-20 10:48:17 |     INFO | __main__ | 编码处理chunk 28
+2025-07-20 10:48:20 |     INFO | __main__ | 编码处理chunk 29
+2025-07-20 10:48:23 |     INFO | __main__ | 编码处理chunk 30
+2025-07-20 10:48:27 |     INFO | __main__ | 编码处理chunk 31
+2025-07-20 10:48:30 |     INFO | __main__ | 编码处理chunk 32
+2025-07-20 10:48:33 |     INFO | __main__ | 编码处理chunk 33
+2025-07-20 10:48:37 |     INFO | __main__ | 编码处理chunk 34
+2025-07-20 10:48:40 |     INFO | __main__ | 编码处理chunk 35
+2025-07-20 10:48:43 |     INFO | __main__ | 编码处理chunk 36
+2025-07-20 10:48:47 |     INFO | __main__ | 编码处理chunk 37
+2025-07-20 10:48:50 |     INFO | __main__ | 编码处理chunk 38
+2025-07-20 10:48:53 |     INFO | __main__ | 编码处理chunk 39
+2025-07-20 10:48:57 |     INFO | __main__ | 编码处理chunk 40
+2025-07-20 10:49:00 |     INFO | __main__ | 编码处理chunk 41
+2025-07-20 10:49:03 |     INFO | __main__ | 编码处理chunk 42
+2025-07-20 10:49:03 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:49:09 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\test\test_segment_1_encoded.parquet, 共 4107121 行
+2025-07-20 10:49:09 |     INFO | __main__ | 编码处理: test_segment_2
+2025-07-20 10:49:09 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\test\test_segment_2.parquet
+2025-07-20 10:49:09 |     INFO | __main__ | 编码处理chunk 1
+2025-07-20 10:49:13 |     INFO | __main__ | 编码处理chunk 2
+2025-07-20 10:49:17 |     INFO | __main__ | 编码处理chunk 3
+2025-07-20 10:49:20 |     INFO | __main__ | 编码处理chunk 4
+2025-07-20 10:49:22 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:49:23 |     INFO | __main__ | 编码完成: data/aeroclub-recsys-2025\encode\test\test_segment_2_encoded.parquet, 共 358948 行
+2025-07-20 10:49:23 |     INFO | __main__ | 编码处理: test_segment_3
+2025-07-20 10:49:23 |     INFO | __main__ | 开始编码处理 data/aeroclub-recsys-2025\segment\test\test_segment_3.parquet
+2025-07-20 10:49:23 |     INFO | __main__ | 所有chunks编码完成，开始合并...
+2025-07-20 10:49:23 |    ERROR | __main__ | 编码阶段失败: No objects to concatenate
+2025-07-20 10:49:23 |    ERROR | __main__ | 数据编码阶段失败，终止流水线
+2025-07-20 10:49:23 |    ERROR | __main__ | 数据处理流水线执行失败！
