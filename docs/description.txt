@@ -245,4 +245,3 @@ Valid rank permutations within each group
 No duplicate ranks per search session
 Basic anti-cheating measures
 Note: The evaluation system expects you to transform your model's output (scores/probabilities) into ranks before submission. Higher model scores should correspond to lower rank numbers (1 = best).
-
