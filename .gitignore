@@ -5,6 +5,7 @@
 # 数据目录、日志目录
 data/
 log/
+logs/
 
 # 只忽略 Python 缓存文件，不忽略源代码目录
 __pycache__/
