@@ -14,7 +14,8 @@ class DataProcessor:
     """数据处理流水线：编码 + 分割"""
     
     def __init__(self, base_dir: str = "data/aeroclub-recsys-2025", 
-                 chunk_size: int = 200000, n_processes: Optional[int] = None):
+                 chunk_size: int = 200000, n_processes: Optional[int] = None,
+                 logger: Optional[logging.Logger] = None):  # 添加logger参数
         self.base_dir = base_dir
         self.chunk_size = chunk_size
         self.n_processes = n_processes or min(cpu_count(), 8)
@@ -29,9 +30,8 @@ class DataProcessor:
             for data_type in ['train', 'test']:
                 os.makedirs(os.path.join(dir_path, data_type), exist_ok=True)
         
-        # 设置日志
-        self._setup_logging()
-        self.logger = logging.getLogger(__name__)
+        # 使用传入的logger或创建新logger
+        self.logger = logger or logging.getLogger(__name__)
         
         # 初始化处理器
         self.encoder = DataEncode(logger=self.logger)
@@ -43,33 +43,7 @@ class DataProcessor:
         
         self.logger.info(f"初始化DataProcessor: chunk_size={chunk_size}, n_processes={self.n_processes}")
     
-    def _setup_logging(self):
-        # 清除现有处理器
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-        
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)8s | %(name)s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        
-        # 控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(logging.INFO)
-        
-        # 文件处理器
-        log_file = os.path.join(self.base_dir, f"processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(logging.DEBUG)
-        
-        # 配置根日志器
-        logging.basicConfig(
-            level=logging.INFO,
-            handlers=[console_handler, file_handler],
-            force=True
-        )
+    # 移除_setup_logging方法
     
     def _get_file_info(self, file_path: str) -> Dict:
         if not os.path.exists(file_path):
@@ -444,6 +418,13 @@ def main():
     os.chdir(main_path)
     print(f"工作目录: {main_path}")
 
+    # 设置基本日志（仅用于独立运行）
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s | %(levelname)8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
     processor = DataProcessor(
         base_dir="data/aeroclub-recsys-2025",
         chunk_size=200000,

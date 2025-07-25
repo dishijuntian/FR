@@ -95,7 +95,8 @@ class FlightRankingCore:
         self.data_processor = DataProcessor(
             base_dir=self.config['paths']['data_dir'],
             chunk_size=data_config['chunk_size'],
-            n_processes=data_config.get('n_processes')
+            n_processes=data_config.get('n_processes'),
+            logger=self.logger  # 传递核心logger
         )
     
     def _init_model_trainer(self):
@@ -106,7 +107,8 @@ class FlightRankingCore:
             data_path=os.path.join(self.project_root, self.config['paths']['data_dir'], "segmented"),
             model_save_path=self.config['paths']['model_save_dir'],
             use_gpu=training_config['use_gpu'],
-            random_state=training_config['random_state']
+            random_state=training_config['random_state'],
+            logger=self.logger  # 传递核心logger
         )
     
     def _init_model_predictor(self):
@@ -118,7 +120,8 @@ class FlightRankingCore:
             model_save_path=self.config['paths']['model_save_dir'],
             output_path=self.config['paths']['output_dir'],
             use_gpu=prediction_config['use_gpu'],
-            random_state=prediction_config['random_state']
+            random_state=prediction_config['random_state'],
+            logger=self.logger  # 传递核心logger
         )
     
     def run_data_processing(self, force: bool = None, verify: bool = None) -> bool:
