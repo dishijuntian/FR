@@ -9,8 +9,8 @@ class FlightRankingPredictor:
                  model_save_path="models", output_path="submissions",
                  use_gpu=False, random_state=42):
         self.data_path = data_path
-        self.model_save_path = model_save_path
-        self.output_path = output_path
+        self.model_save_path = os.path.join(data_path, model_save_path)
+        self.output_path = os.path.join(data_path, output_path)
         self.use_gpu = use_gpu
         self.random_state = random_state
         os.makedirs(output_path, exist_ok=True)

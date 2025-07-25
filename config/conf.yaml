@@ -1,0 +1,127 @@
+# 航班排名系统配置文件
+# Flight Ranking System Configuration
+
+# 路径配置
+paths:
+  # 数据目录（相对于项目根目录）
+  data_dir: "data/aeroclub-recsys-2025"
+  
+  # 模型保存目录
+  model_save_dir: "data/aeroclub-recsys-2025/models"
+  
+  # 输出目录
+  output_dir: "data/aeroclub-recsys-2025/submissions"
+  
+  # 日志目录
+  log_dir: "logs"
+
+# 数据处理配置
+data_processing:
+  # 数据块大小（用于内存管理）
+  chunk_size: 200000
+  
+  # 并行进程数（null表示自动检测）
+  n_processes: null
+  
+  # 是否强制重新处理数据
+  force_reprocess: false
+  
+  # 是否验证处理结果
+  verify_results: true
+
+# 模型训练配置
+training:
+  # 要训练的数据段
+  segments: [0, 1, 2]
+  
+  # 是否使用GPU加速
+  use_gpu: true
+  
+  # 随机种子
+  random_state: 42
+  
+  # 模型参数
+  model_params:
+    xgboost:
+      n_estimators: 200
+      max_depth: 8
+      learning_rate: 0.05
+      verbosity: 0
+    
+    lightgbm:
+      n_estimators: 200
+      max_depth: 8
+      learning_rate: 0.05
+      verbose: -1
+
+# 模型预测配置
+prediction:
+  # 要预测的数据段
+  segments: [0, 1, 2]
+  
+  # 使用的模型名称
+  model_name: "XGBRanker"
+  
+  # 是否使用GPU加速
+  use_gpu: true
+  
+  # 随机种子
+  random_state: 42
+
+# 流水线执行配置
+pipeline:
+  # 是否执行数据处理阶段
+  run_data_processing: true
+  
+  # 是否执行模型训练阶段
+  run_training: true
+  
+  # 是否执行模型预测阶段
+  run_prediction: true
+  
+  # 失败时是否继续执行后续阶段
+  continue_on_failure: false
+
+# 日志配置
+logging:
+  # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # 日志格式
+  format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
+  
+  # 日志时间格式
+  datefmt: "%Y-%m-%d %H:%M:%S"
+
+# 高级配置
+advanced:
+  # 内存使用优化
+  memory_optimization: true
+  
+  # 并行处理优化
+  parallel_optimization: true
+  
+  # 临时文件清理
+  cleanup_temp_files: true
+
+# 验证配置
+validation:
+  # 数据完整性检查
+  check_data_integrity: true
+  
+  # 模型性能验证
+  validate_model_performance: true
+  
+  # 预测结果验证
+  validate_predictions: true
+
+# 性能监控配置
+monitoring:
+  # 是否启用性能监控
+  enable_monitoring: true
+  
+  # 内存使用监控
+  monitor_memory: true
+  
+  # 处理时间监控
+  monitor_timing: true

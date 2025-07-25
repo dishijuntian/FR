@@ -23,11 +23,41 @@ class DataSegment:
         """获取段级别对应的正则表达式模式"""
         return f'segments{segment_level}'
     
-    def _detect_segment_ranker_ids(self, df: pd.DataFrame, segment_level: int) -> Set[str]:
-        """检测包含指定段级别数据的ranker_id"""
-        pattern = self._get_segment_pattern(segment_level)
-        segment_mask = ~df.filter(regex=pattern).isnull().all(axis=1)
-        return set(df.loc[segment_mask, 'ranker_id'].unique())
+    def _classify_ranker_ids_by_segments(self, df: pd.DataFrame) -> Dict[int, Set[str]]:
+        """
+        将ranker_id按照其包含的最高segment级别进行分类
+        返回：{segment_level: set_of_ranker_ids}
+        """
+        ranker_segment_map = {}
+        
+        # 为每个ranker_id找到其最高的segment级别
+        for ranker_id in df['ranker_id'].unique():
+            ranker_data = df[df['ranker_id'] == ranker_id]
+            max_segment = -1
+            
+            # 检查从高到低的segment级别
+            for segment_level in [3, 2, 1, 0]:
+                pattern = self._get_segment_pattern(segment_level)
+                segment_cols = df.filter(regex=pattern).columns
+                
+                if len(segment_cols) > 0:
+                    # 检查是否有有效数据（非-1且非null）
+                    segment_data = ranker_data[segment_cols]
+                    has_valid_data = ~((segment_data == -1) | segment_data.isnull()).all(axis=1).all()
+                    
+                    if has_valid_data:
+                        max_segment = segment_level
+                        break
+            
+            if max_segment >= 0:
+                ranker_segment_map[ranker_id] = max_segment
+        
+        # 按segment级别分组
+        segment_ranker_map = {0: set(), 1: set(), 2: set(), 3: set()}
+        for ranker_id, segment_level in ranker_segment_map.items():
+            segment_ranker_map[segment_level].add(ranker_id)
+        
+        return segment_ranker_map
     
     def _get_parquet_row_groups_info(self, file_path: str) -> List[Tuple[int, int]]:
         """获取parquet文件的行组信息"""
@@ -55,29 +85,34 @@ class DataSegment:
         else:
             return pd.DataFrame()
     
-    def _process_batch_for_segment(self, batch_df: pd.DataFrame, segment_level: int, 
-                                   data_type: str, batch_id: int, output_dir: str) -> Dict:
+    def _process_batch_for_segment(self, batch_df: pd.DataFrame, segment_ranker_ids: Set[str], 
+                                   segment_level: int, data_type: str, batch_id: int, 
+                                   output_dir: str) -> Dict:
         """处理单个批次的特定segment级别数据"""
         try:
-            # 检测包含当前segment级别的ranker_id
-            segment_ranker_ids = self._detect_segment_ranker_ids(batch_df, segment_level)
+            # 获取当前批次中属于该segment的ranker_id
+            batch_ranker_ids = set(batch_df['ranker_id'].unique())
+            target_ranker_ids = batch_ranker_ids.intersection(segment_ranker_ids)
             
-            if not segment_ranker_ids:
+            if not target_ranker_ids:
                 return {
                     'batch_id': batch_id,
                     'segment_level': segment_level,
-                    'processed_ranker_ids': set(),
-                    'rows_processed': 0
+                    'processed_rows': 0,
+                    'processed_ranker_ids': 0
                 }
             
             # 提取对应的数据
-            segment_data = batch_df[batch_df['ranker_id'].isin(segment_ranker_ids)].copy()
+            segment_data = batch_df[batch_df['ranker_id'].isin(target_ranker_ids)].copy()
             
             # 保存数据到临时文件
             temp_filename = f"temp_{data_type}_segment_{segment_level}_batch_{batch_id}.parquet"
             temp_filepath = os.path.join(output_dir, temp_filename)
             
             segment_data.to_parquet(temp_filepath, index=False)
+            
+            rows_count = len(segment_data)
+            ranker_count = len(target_ranker_ids)
             
             # 清理内存
             del segment_data
@@ -86,8 +121,8 @@ class DataSegment:
             return {
                 'batch_id': batch_id,
                 'segment_level': segment_level,
-                'processed_ranker_ids': segment_ranker_ids,
-                'rows_processed': len(segment_ranker_ids),
+                'processed_rows': rows_count,
+                'processed_ranker_ids': ranker_count,
                 'temp_file': temp_filepath
             }
             
@@ -96,12 +131,12 @@ class DataSegment:
                 'batch_id': batch_id,
                 'segment_level': segment_level,
                 'error': str(e),
-                'processed_ranker_ids': set(),
-                'rows_processed': 0
+                'processed_rows': 0,
+                'processed_ranker_ids': 0
             }
     
-    def _merge_temp_files(self, data_type: str, segment_level: int, temp_files: List[str], output_dir: str):
-        """合并临时文件"""
+    def _merge_temp_files(self, data_type: str, segment_level: int, temp_files: List[str], output_dir: str) -> int:
+        """合并临时文件，返回总行数"""
         final_filename = f"{data_type}_segment_{segment_level}.parquet"
         final_filepath = os.path.join(output_dir, final_filename)
         
@@ -110,12 +145,11 @@ class DataSegment:
         
         # 如果没有临时文件，创建空文件
         if not temp_files:
-            # 创建空DataFrame并保存
             empty_df = pd.DataFrame()
             empty_df.to_parquet(final_filepath, index=False)
             if self.logger:
                 self.logger.info(f"创建空文件: {final_filepath}")
-            return
+            return 0
         
         # 读取所有临时文件并合并
         dfs = []
@@ -126,27 +160,27 @@ class DataSegment:
                 # 删除临时文件
                 os.remove(temp_file)
         
+        total_rows = 0
         if dfs:
             combined_df = pd.concat(dfs, ignore_index=True)
             
-            # 如果最终文件已存在，合并
-            if os.path.exists(final_filepath):
-                existing_df = pd.read_parquet(final_filepath)
-                combined_df = pd.concat([existing_df, combined_df], ignore_index=True)
-            
             combined_df.to_parquet(final_filepath, index=False)
+            total_rows = len(combined_df)
+            
             if self.logger:
-                self.logger.info(f"分割合并完成: {final_filepath}, 共 {len(combined_df)} 行")
+                self.logger.info(f"分割合并完成: {final_filepath}, 共 {total_rows} 行")
         else:
-            # 如果dfs为空（所有临时文件都不存在），创建空文件
+            # 如果dfs为空，创建空文件
             empty_df = pd.DataFrame()
             empty_df.to_parquet(final_filepath, index=False)
             if self.logger:
-                self.logger.info(f"创建空文件（无临时数据）: {final_filepath}")
+                self.logger.info(f"创建空文件（无数据）: {final_filepath}")
         
         # 清理内存
         del dfs
         gc.collect()
+        
+        return total_rows
     
     def _create_batches_from_row_groups(self, file_path: str, target_batch_size: int) -> List[List[int]]:
         """根据行组创建批次"""
@@ -170,8 +204,56 @@ class DataSegment:
         
         return batches
     
-    def process_file(self, input_file: str, data_type: str, output_dir: str):
-        """处理单个文件进行分割"""
+    def _get_ranker_segment_classification(self, input_file: str) -> Dict[int, Set[str]]:
+        """
+        预先扫描文件，对所有ranker_id进行segment分类
+        这是一个关键优化：避免重复扫描和分类错误
+        """
+        if self.logger:
+            self.logger.info("开始预扫描文件进行ranker_id分类...")
+        
+        parquet_file = pq.ParquetFile(input_file)
+        all_ranker_segment_map = {}
+        
+        # 分批读取并分类
+        for batch_idx, batch in enumerate(parquet_file.iter_batches(batch_size=self.chunk_size)):
+            batch_df = batch.to_pandas()
+            batch_classification = self._classify_ranker_ids_by_segments(batch_df)
+            
+            # 合并分类结果（取最高segment级别）
+            for segment_level, ranker_ids in batch_classification.items():
+                for ranker_id in ranker_ids:
+                    if ranker_id not in all_ranker_segment_map:
+                        all_ranker_segment_map[ranker_id] = segment_level
+                    else:
+                        # 如果已存在，取更高的segment级别
+                        all_ranker_segment_map[ranker_id] = max(
+                            all_ranker_segment_map[ranker_id], segment_level
+                        )
+            
+            if self.logger and (batch_idx + 1) % 10 == 0:
+                self.logger.info(f"已处理 {batch_idx + 1} 批次，发现 {len(all_ranker_segment_map)} 个ranker_id")
+        
+        # 按segment级别重新分组
+        final_classification = {0: set(), 1: set(), 2: set(), 3: set()}
+        for ranker_id, segment_level in all_ranker_segment_map.items():
+            final_classification[segment_level].add(ranker_id)
+        
+        if self.logger:
+            total_rankers = sum(len(ids) for ids in final_classification.values())
+            self.logger.info(f"分类完成，总计 {total_rankers} 个ranker_id:")
+            for level in [3, 2, 1, 0]:
+                count = len(final_classification[level])
+                if count > 0:
+                    self.logger.info(f"  Segment {level}: {count} 个ranker_id")
+        
+        return final_classification
+    
+    def process_file(self, input_file: str, data_type: str, output_dir: str) -> Dict[int, int]:
+        """
+        处理单个文件进行分割
+        返回：{segment_level: row_count}
+        """
         if not input_file.endswith('.parquet'):
             raise ValueError(f"仅支持parquet格式文件，当前文件: {input_file}")
         
@@ -181,68 +263,100 @@ class DataSegment:
         # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)
         
-        # 创建批次
-        batches = self._create_batches_from_row_groups(input_file, self.chunk_size)
-        if self.logger:
-            self.logger.info(f"创建了 {len(batches)} 个批次")
-        
-        # 存储所有处理过的ranker_id
-        all_processed_ranker_ids = set()
-        
-        # 按segment级别从高到低处理（3 -> 0）
-        for segment_level in [3, 2, 1, 0]:
+        try:
+            # 步骤1：预先分类所有ranker_id
+            ranker_classification = self._get_ranker_segment_classification(input_file)
+            
+            # 步骤2：创建批次
+            batches = self._create_batches_from_row_groups(input_file, self.chunk_size)
             if self.logger:
-                self.logger.info(f"处理 segment_{segment_level} 级别数据...")
+                self.logger.info(f"创建了 {len(batches)} 个批次")
             
-            temp_files = []
+            # 步骤3：按segment级别处理数据
+            segment_results = {}
             
-            # 使用进程池处理批次
-            with ProcessPoolExecutor(max_workers=self.n_processes) as executor:
-                futures = []
+            for segment_level in [3, 2, 1, 0]:
+                segment_ranker_ids = ranker_classification[segment_level]
                 
-                for batch_id, row_group_indices in enumerate(batches):
-                    # 读取批次数据
-                    batch_df = self._read_row_group_batch(input_file, row_group_indices)
-                    
-                    # 过滤掉已处理的ranker_id
-                    if all_processed_ranker_ids:
-                        batch_df = batch_df[~batch_df['ranker_id'].isin(all_processed_ranker_ids)]
-                    
-                    if batch_df.empty:
-                        continue
-                    
-                    # 提交任务
-                    future = executor.submit(
-                        self._process_batch_for_segment,
-                        batch_df, segment_level, data_type, batch_id, output_dir
-                    )
-                    futures.append(future)
+                if not segment_ranker_ids:
+                    # 创建空文件
+                    final_filename = f"{data_type}_segment_{segment_level}.parquet"
+                    final_filepath = os.path.join(output_dir, final_filename)
+                    empty_df = pd.DataFrame()
+                    empty_df.to_parquet(final_filepath, index=False)
+                    segment_results[segment_level] = 0
+                    if self.logger:
+                        self.logger.info(f"Segment {segment_level}: 无数据，创建空文件")
+                    continue
                 
-                # 收集结果
-                for future in as_completed(futures):
-                    result = future.result()
+                if self.logger:
+                    self.logger.info(f"处理 segment_{segment_level} 级别数据，包含 {len(segment_ranker_ids)} 个ranker_id...")
+                
+                temp_files = []
+                
+                # 使用进程池处理批次
+                with ProcessPoolExecutor(max_workers=self.n_processes) as executor:
+                    futures = []
                     
-                    if 'error' in result:
-                        if self.logger:
-                            self.logger.error(f"批次 {result['batch_id']} 处理失败: {result['error']}")
-                        continue
+                    for batch_id, row_group_indices in enumerate(batches):
+                        # 读取批次数据
+                        batch_df = self._read_row_group_batch(input_file, row_group_indices)
+                        
+                        if batch_df.empty:
+                            continue
+                        
+                        # 提交任务
+                        future = executor.submit(
+                            self._process_batch_for_segment,
+                            batch_df, segment_ranker_ids, segment_level, 
+                            data_type, batch_id, output_dir
+                        )
+                        futures.append(future)
                     
-                    # 更新已处理的ranker_id
-                    all_processed_ranker_ids.update(result['processed_ranker_ids'])
+                    # 收集结果
+                    total_processed_rows = 0
+                    total_processed_rankers = 0
                     
-                    # 收集临时文件
-                    if 'temp_file' in result:
-                        temp_files.append(result['temp_file'])
+                    for future in as_completed(futures):
+                        result = future.result()
+                        
+                        if 'error' in result:
+                            if self.logger:
+                                self.logger.error(f"批次 {result['batch_id']} 处理失败: {result['error']}")
+                            continue
+                        
+                        total_processed_rows += result['processed_rows']
+                        total_processed_rankers += result['processed_ranker_ids']
+                        
+                        # 收集临时文件
+                        if 'temp_file' in result and result['processed_rows'] > 0:
+                            temp_files.append(result['temp_file'])
+                
+                # 合并临时文件
+                segment_row_count = self._merge_temp_files(data_type, segment_level, temp_files, output_dir)
+                segment_results[segment_level] = segment_row_count
+                
+                if self.logger:
+                    self.logger.info(f"segment_{segment_level} 处理完成: {segment_row_count} 行")
             
-            # 合并临时文件
-            self._merge_temp_files(data_type, segment_level, temp_files, output_dir)
-            
+            # 步骤4：验证结果
+            total_output_rows = sum(segment_results.values())
             if self.logger:
-                self.logger.info(f"segment_{segment_level} 处理完成, "
-                               f"累计处理 {len(all_processed_ranker_ids)} 个ranker_id")
-        
-        if self.logger:
-            self.logger.info(f"完成分割 {input_file}, 总计处理 {len(all_processed_ranker_ids)} 个ranker_id")
+                self.logger.info(f"完成分割 {input_file}")
+                self.logger.info(f"分割结果汇总:")
+                for level in [3, 2, 1, 0]:
+                    if segment_results[level] > 0:
+                        self.logger.info(f"  Segment {level}: {segment_results[level]:,} 行")
+                self.logger.info(f"总计输出: {total_output_rows:,} 行")
+            
+            return segment_results
+            
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"分割处理异常: {str(e)}")
+                import traceback
+                self.logger.error(f"详细错误:\n{traceback.format_exc()}")
+            raise
     
     def get_output_files(self, data_type: str, output_dir: str) -> List[str]:
         """获取输出文件列表"""
@@ -252,3 +366,56 @@ class DataSegment:
             filepath = os.path.join(output_dir, filename)
             files.append(filepath)
         return files
+    
+    def verify_segmentation(self, input_file: str, output_dir: str, data_type: str) -> Dict:
+        """验证分割结果的完整性"""
+        if self.logger:
+            self.logger.info("开始验证分割结果...")
+        
+        # 读取原始文件统计
+        original_df = pd.read_parquet(input_file)
+        original_rows = len(original_df)
+        original_rankers = original_df['ranker_id'].nunique()
+        
+        # 读取分割文件统计
+        total_segmented_rows = 0
+        segmented_rankers = set()
+        segment_stats = {}
+        
+        for level in [0, 1, 2, 3]:
+            segment_file = os.path.join(output_dir, f"{data_type}_segment_{level}.parquet")
+            if os.path.exists(segment_file):
+                segment_df = pd.read_parquet(segment_file)
+                rows = len(segment_df)
+                rankers = set(segment_df['ranker_id'].unique()) if rows > 0 else set()
+                
+                total_segmented_rows += rows
+                segmented_rankers.update(rankers)
+                segment_stats[level] = {'rows': rows, 'rankers': len(rankers)}
+        
+        # 检查完整性
+        row_match = original_rows == total_segmented_rows
+        ranker_match = original_rankers == len(segmented_rankers)
+        
+        result = {
+            'original': {'rows': original_rows, 'rankers': original_rankers},
+            'segmented': {'total_rows': total_segmented_rows, 'total_rankers': len(segmented_rankers)},
+            'segments': segment_stats,
+            'integrity': {'rows_match': row_match, 'rankers_match': ranker_match}
+        }
+        
+        if self.logger:
+            self.logger.info(f"验证结果:")
+            self.logger.info(f"  原始数据: {original_rows:,} 行, {original_rankers:,} ranker_id")
+            self.logger.info(f"  分割数据: {total_segmented_rows:,} 行, {len(segmented_rankers):,} ranker_id")
+            self.logger.info(f"  行数匹配: {row_match}, ranker_id匹配: {ranker_match}")
+            
+            if not row_match:
+                diff = original_rows - total_segmented_rows
+                self.logger.warning(f"行数差异: {diff} 行")
+            
+            if not ranker_match:
+                diff = original_rankers - len(segmented_rankers)
+                self.logger.warning(f"ranker_id差异: {diff} 个")
+        
+        return result
