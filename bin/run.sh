@@ -4,7 +4,7 @@
 # 提供交互式菜单选项和直接参数启动两种方式
 
 # 获取脚本所在目录（项目根目录）
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE}" )" && pwd )"
 cd "$SCRIPT_DIR" || { echo "❌ 无法进入项目目录"; exit 1; }
 
 # 设置Python路径

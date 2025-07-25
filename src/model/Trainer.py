@@ -1,25 +1,27 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from FlightRankingAnalyzer import FlightRankingAnalyzer
-import os
+from src.model.FlightRankingAnalyzer import FlightRankingAnalyzer
 import joblib
+from pathlib import Path
 
 class FlightRankingTrainer:
-    def __init__(self, data_path="data/aeroclub-recsys-2025/encode", 
+    def __init__(self, data_path="data/aeroclub-recsys-2025/segmented", 
                  model_save_path="models", use_gpu=False, random_state=42):
-        self.data_path = data_path
-        self.model_save_path = model_save_path
+        self.data_path = Path(data_path)
+        self.model_save_path = self.data_path / model_save_path
         self.use_gpu = use_gpu
         self.random_state = random_state
-        os.makedirs(model_save_path, exist_ok=True)
+        
+        # 确保模型保存目录存在
+        self.model_save_path.mkdir(parents=True, exist_ok=True)
     
     def train_segment(self, segment_id):
         """训练单个数据段"""
         print(f"开始训练 segment_{segment_id}")
         
         # 加载数据
-        train_file = f"{self.data_path}/train/train_segment_{segment_id}_encoded.parquet"
+        train_file = self.data_path / "train" / f"train_segment_{segment_id}.parquet"
         df = pd.read_parquet(train_file)
         print(f"数据形状: {df.shape}")
         
@@ -50,12 +52,12 @@ class FlightRankingTrainer:
         
         # 保存模型
         for model_name in analyzer.trained_models:
-            model_path = f"{self.model_save_path}/{model_name}_segment_{segment_id}.pkl"
-            analyzer.save_model(model_path, model_name)
+            model_path = self.model_save_path / f"{model_name}_segment_{segment_id}.pkl"
+            analyzer.save_model(str(model_path), model_name)
             print(f"已保存模型: {model_path}")
         
         # 保存特征名称
-        feature_path = f"{self.model_save_path}/features_segment_{segment_id}.pkl"
+        feature_path = self.model_save_path / f"features_segment_{segment_id}.pkl"
         joblib.dump(feature_cols, feature_path)
         
         # 输出结果

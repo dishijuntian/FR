@@ -103,7 +103,7 @@ class FlightRankingCore:
         training_config = self.config['training']
         
         self.model_trainer = FlightRankingTrainer(
-            data_path=os.path.join(self.config['paths']['data_dir'], "segmented"),
+            data_path=os.path.join(self.project_root, self.config['paths']['data_dir'], "segmented"),
             model_save_path=self.config['paths']['model_save_dir'],
             use_gpu=training_config['use_gpu'],
             random_state=training_config['random_state']
@@ -114,7 +114,7 @@ class FlightRankingCore:
         prediction_config = self.config['prediction']
         
         self.model_predictor = FlightRankingPredictor(
-            data_path=os.path.join(self.config['paths']['data_dir'], "segmented"),
+            data_path=os.path.join(self.project_root, self.config['paths']['data_dir'], "segmented"),
             model_save_path=self.config['paths']['model_save_dir'],
             output_path=self.config['paths']['output_dir'],
             use_gpu=prediction_config['use_gpu'],
