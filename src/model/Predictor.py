@@ -1,31 +1,33 @@
 import pandas as pd
 import numpy as np
-from FlightRankingAnalyzer import FlightRankingAnalyzer
+from src.model.FlightRankingAnalyzer import FlightRankingAnalyzer
 import joblib
-import os
+from pathlib import Path
 
 class FlightRankingPredictor:
-    def __init__(self, data_path="data/aeroclub-recsys-2025/encode", 
+    def __init__(self, data_path="data/aeroclub-recsys-2025/segmented", 
                  model_save_path="models", output_path="submissions",
                  use_gpu=False, random_state=42):
-        self.data_path = data_path
-        self.model_save_path = os.path.join(data_path, model_save_path)
-        self.output_path = os.path.join(data_path, output_path)
+        self.data_path = Path(data_path)
+        self.model_save_path = self.data_path / model_save_path
+        self.output_path = self.data_path / output_path
         self.use_gpu = use_gpu
         self.random_state = random_state
-        os.makedirs(output_path, exist_ok=True)
+        
+        # 确保输出目录存在
+        self.output_path.mkdir(parents=True, exist_ok=True)
     
     def predict_segment(self, segment_id, model_name='XGBRanker'):
         """预测单个数据段"""
         print(f"开始预测 segment_{segment_id}")
         
         # 检查模型文件是否存在
-        model_path = f"{self.model_save_path}/{model_name}_segment_{segment_id}.pkl"
-        if not os.path.exists(model_path):
+        model_path = self.model_save_path / f"{model_name}_segment_{segment_id}.pkl"
+        if not model_path.exists():
             raise FileNotFoundError(f"模型文件不存在: {model_path}")
         
         # 加载测试数据
-        test_file = f"{self.data_path}/test/test_segment_{segment_id}_encoded.parquet"
+        test_file = self.data_path / "test" / f"test_segment_{segment_id}.parquet"
         df = pd.read_parquet(test_file)
         print(f"测试数据形状: {df.shape}")
         
@@ -33,7 +35,7 @@ class FlightRankingPredictor:
         analyzer = FlightRankingAnalyzer(use_gpu=self.use_gpu, random_state=self.random_state)
         
         # 加载特征名称
-        feature_path = f"{self.model_save_path}/features_segment_{segment_id}.pkl"
+        feature_path = self.model_save_path / f"features_segment_{segment_id}.pkl"
         feature_cols = joblib.load(feature_path)
         analyzer.feature_names = feature_cols
         
@@ -41,7 +43,7 @@ class FlightRankingPredictor:
         X, _, groups, _, df_processed = analyzer.prepare_data(df, target_col='selected')
         
         # 加载模型
-        analyzer.load_model(model_path, model_name)
+        analyzer.load_model(str(model_path), model_name)
         print(f"已加载模型: {model_path}")
         
         # 预测排名
@@ -68,7 +70,7 @@ class FlightRankingPredictor:
                 all_predictions.append(prediction)
                 
                 # 保存单个段的预测结果
-                segment_output = f"{self.output_path}/{model_name}_segment_{segment_id}_prediction.csv"
+                segment_output = self.output_path / f"{model_name}_segment_{segment_id}_prediction.csv"
                 prediction.to_csv(segment_output, index=False)
                 print(f"已保存预测结果: {segment_output}")
                 
@@ -87,7 +89,7 @@ class FlightRankingPredictor:
         final_submission = final_submission.sort_values('Id').reset_index(drop=True)
         
         # 保存最终结果
-        final_output = f"{self.output_path}/{model_name}_final_submission.csv"
+        final_output = self.output_path / f"{model_name}_final_submission.csv"
         final_submission.to_csv(final_output, index=False)
         
         # 结果验证

@@ -1,10 +1,10 @@
-<<<<<<< HEAD
 # 备份文件
 *~
 ..*~
 
-# 数据目录（仍需忽略）
+# 数据目录、日志目录
 data/
+log/
 
 # 只忽略 Python 缓存文件，不忽略源代码目录
 __pycache__/
@@ -15,10 +15,7 @@ __pycache__/
 # 确保 src/data 下的缓存被忽略，但保留该目录和 .py 文件
 src/**/__pycache__/
 src/**/*.pyc
-=======
-﻿data/
 
 !src/data/
 !src/data/**
 **/__pycache__
->>>>>>> 32afd278a32d2b49d6aef271a96d7790e46b6726
