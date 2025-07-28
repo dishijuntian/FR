@@ -1,360 +1,262 @@
-# Flight Ranking Competition - Business Travel Recommendation System ✈️
+# 航班排序分析器 (Flight Ranking Analyzer) v2.1
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org/)
-[![Competition](https://img.shields.io/badge/competition-Kaggle-20BEFF.svg)](https://kaggle.com/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://claude.xiaoai.shop/chat/LICENSE)
+一个基于机器学习的航班排序分析系统，支持多种排序模型、自动超参数调优和预测结果合并。
 
-## 🎯 Project Overview
+## ✨ 新功能 (v2.1)
 
-This project tackles the challenge of building an intelligent flight ranking model that predicts which flight option business travelers will choose from search results. Unlike leisure travelers who primarily focus on cost, business travelers must balance multiple competing factors: corporate travel policies, meeting schedules, expense compliance, and personal convenience.
+- ✅ **不抽样选项**: 支持对所有segment文件的全部数据进行训练
+- ✅ **预测结果合并**: 自动合并多个预测文件并与submission文件对应
+- ✅ **自动调参功能**: 基于Optuna的超参数自动优化（默认关闭）
+- ✅ **模块化架构**: 代码重构为多个独立模块，便于维护和扩展
 
-### Competition Goal
+## 🚀 功能特性
 
-* **Objective** : Build a group-wise ranking model to predict business traveler flight preferences
-* **Problem Type** : Group-wise ranking problem within user search sessions
-* **Evaluation Metric** : HitRate@3 - fraction of sessions where correct flight appears in top-3 predictions
-* **Dataset Size** : 18M+ training samples, 6.9M+ test samples
+### 排序模型
+- **XGBRanker**: XGBoost排序模型
+- **LGBMRanker**: LightGBM排序模型  
+- **LambdaMART**: 基于XGBoost的LambdaMART实现
+- **ListNet**: 基于LightGBM的ListNet实现
+- **NeuralRanker**: 深度神经网络排序模型
+- **BM25Ranker**: 传统BM25算法
 
-## 🏆 Competition Details
+### 核心功能
+- 📊 **HitRate@3评估**: 专业的排序模型评估指标
+- 🎯 **特征重要性分析**: 多种方法分析特征贡献度
+- 🔍 **SHAP可解释性**: 模型决策的可视化解释
+- ⚡ **GPU加速**: 自动检测并使用GPU进行训练
+- 🎛️ **自动调参**: 基于Optuna的贝叶斯优化
+- 🔄 **结果合并**: 多模型集成和预测结果整合
 
-### Key Challenges
+### 数据处理
+- 📈 **智能抽样**: 基于ranker_id的分组抽样
+- 💾 **内存优化**: 自动内存管理和数据类型优化
+- 🔧 **特征工程**: 自动特征选择和预处理
+- 📋 **缺失值处理**: 智能填充策略
 
-* **Complex Decision Patterns** : Business travelers balance policies, schedules, and convenience
-* **Variable Group Sizes** : Handle 10-1000+ flight options per search session
-* **Sparse Signal** : Only one positive example per group (selected flight)
-* **Real-world Scale** : Dataset contains actual flight search sessions
-
-### Evaluation Criteria
-
-* **Primary Metric** : HitRate@3 (only groups with >10 options)
-* **Score Range** : 0 to 1 (1 = correct flight always in top-3)
-* **Bonus Threshold** : HitRate@3 ≥ 0.7 doubles prize money
-
-## 📊 Dataset Structure
-
-### Main Files
-
-* `train.parquet` - Training data (18,145,372 rows)
-* `test.parquet` - Test data (6,897,776 rows)
-* `sample_submission.parquet` - Submission format example
-* `jsons_raw.tar.kaggle` - Raw JSON data (150K files, ~50GB)
-
-### Key Features
-
-#### User & Company Information
-
-* User demographics, VIP status, frequent flyer programs
-* Corporate tariff codes and travel policies
-* Booking independence indicators
-
-#### Flight Details
-
-* Pricing: Total price, taxes, policy compliance
-* Timing: Departure/arrival times, duration
-* Route: Airports, airlines, aircraft types
-* Service: Cabin class, baggage allowance, seat availability
-* Flexibility: Cancellation/exchange rules and penalties
-
-#### Search Context
-
-* Search route (single/round trip)
-* Request timestamp
-* Session grouping (`ranker_id`)
-
-## 🏗️ Technical Architecture
-
-### Project Structure
+## 📁 项目结构
 
 ```
-flight-ranking-system/
-├── bin/
-│   └── start.sh              # Interactive startup script
+flight_ranking_analyzer/
 ├── src/
-│   ├── main.py              # Main application entry
-│   ├── core/
-│   │   ├── data_processor.py # Data loading and preprocessing
-│   │   ├── feature_engineer.py # Feature engineering pipeline
-│   │   ├── model_trainer.py  # Model training and validation
-│   │   └── predictor.py     # Prediction and ranking
-│   ├── models/
-│   │   ├── xgb_ranker.py    # XGBoost ranking models
-│   │   ├── lgb_ranker.py    # LightGBM ranking models
-│   │   └── ensemble.py      # Model ensemble methods
-│   └── utils/
-│       ├── metrics.py       # Evaluation metrics
-│       ├── validation.py    # Cross-validation strategies
-│       └── preprocessing.py # Data preprocessing utilities
-├── config/
-│   ├── conf.yaml           # Main configuration
-│   └── model_configs/      # Model-specific configs
-├── data/
-│   ├── raw/                # Original competition data
-│   ├── processed/          # Engineered features
-│   └── submissions/        # Generated submissions
-├── models/
-│   ├── trained/           # Saved model artifacts
-│   └── checkpoints/       # Training checkpoints
-├── logs/                  # Execution logs
-├── notebooks/             # Jupyter notebooks for EDA
-└── requirements.txt       # Python dependencies
+│   ├── __init__.py           # 包初始化
+│   ├── config.py             # 配置管理
+│   ├── models.py             # 模型定义
+│   ├── data_processor.py     # 数据处理
+│   ├── auto_tuner.py         # 自动调参
+│   └── analyzer.py           # 主分析器
+├── main.py                   # 主程序入口
+├── requirements.txt          # 依赖包列表
+└── README.md                # 项目说明
 ```
 
-## 🚀 Quick Start
+## 🛠️ 安装说明
 
-### Installation
+### 1. 环境要求
+- Python 3.8+
+- CUDA 11.x (可选，用于GPU加速)
 
+### 2. 安装依赖
 ```bash
-git clone https://github.com/dishijuntian/FR.git
-cd FR
 pip install -r requirements.txt
 ```
 
-### Basic Usage
-
-#### 1. Default Full Pipeline
-
+### 3. GPU支持 (可选)
+如需GPU加速，请安装CUDA相关库：
 ```bash
-./bin/start.sh
+# 对于CUDA 11.x
+pip install cupy-cuda11x
+
+# 确保TensorFlow GPU支持
+pip install tensorflow[and-cuda]
 ```
 
-#### 2. Interactive Menu Mode
+## 📝 配置说明
 
-```bash
-./bin/start.sh --interactive
-```
-
-#### 3. Command Line Options
-
-```bash
-# Training only
-./bin/start.sh --mode training
-
-# Custom configuration
-./bin/start.sh --config custom_config.yaml
-
-# Force reprocessing
-./bin/start.sh --force
-
-# Show help
-./bin/start.sh --help
-```
-
-### Interactive Menu Features
-
-The startup script provides user-friendly menus:
-
-**Main Menu:**
-
-1. Complete pipeline execution (default)
-2. Data processing only
-3. Model training only
-4. Model prediction only
-5. System status check
-6. Advanced options
-7. Exit
-
-**Advanced Options:**
-
-* Force data reprocessing
-* Custom configuration files
-* Data segment specification
-* Model selection
-* Skip data validation
-* Verbose output mode
-
-## 📈 Technical Challenges & Solutions
-
-### 1. Ranking Problem Complexity
-
-* **Challenge** : Converting classification/regression to ranking
-* **Solution** : Use ranking-aware loss functions and evaluation metrics
-
-### 2. Variable Group Sizes
-
-* **Challenge** : Handle groups from 10-1000+ options
-* **Solution** : Scalable models and efficient ranking algorithms
-
-### 3. Sparse Signal
-
-* **Challenge** : Only 1 positive example per group
-* **Solution** : Careful sampling and augmentation strategies
-
-### 4. Business Logic Integration
-
-* **Challenge** : Capture complex business travel preferences
-* **Solution** : Domain expertise and interpretable features
-
-### 5. Computational Efficiency
-
-* **Challenge** : Large dataset with complex features
-* **Solution** : Efficient algorithms and parallel processing
-
-## 🔧 Configuration
-
-### Main Configuration (`config/conf.yaml`)
-
-```yaml
-# Flight Ranking System Configuration
-
-paths:
-  data_dir: "data/aeroclub-recsys-2025"
-  model_save_dir: "data/aeroclub-recsys-2025/models"
-  output_dir: "data/aeroclub-recsys-2025/submissions"
-  log_dir: "logs"
-
-data_processing:
-  chunk_size: 200000
-  n_processes: null
-  force_reprocess: false
-  verify_results: true
-
-training:
-  segments: [0, 1, 2]
-  use_gpu: true
-  random_state: 42
-  
-  model_params:
-    xgboost:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
-      verbosity: 0
-  
-    lightgbm:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
-      verbose: -1
-
-prediction:
-  segments: [0, 1, 2]
-  model_name: "XGBRanker"
-  use_gpu: true
-  random_state: 42
-
-pipeline:
-  run_data_processing: true
-  run_training: true
-  run_prediction: true
-  continue_on_failure: false
-
-logging:
-  level: "INFO"
-  format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
-  datefmt: "%Y-%m-%d %H:%M:%S"
-
-advanced:
-  memory_optimization: true
-  parallel_optimization: true
-  cleanup_temp_files: true
-
-validation:
-  check_data_integrity: true
-  validate_model_performance: true
-  validate_predictions: true
-
-monitoring:
-  enable_monitoring: true
-  monitor_memory: true
-  monitor_timing: true
-```
-
-## 📊 Evaluation & Metrics
-
-### Primary Metric: HitRate@3
+### 数据路径配置
+在 `src/config.py` 中修改数据路径：
 
 ```python
-def hitrate_at_3(y_true_ranks, y_pred_ranks):
-    """
-    Calculate HitRate@3 for ranking predictions
-    Only considers groups with >10 options
-    """
-    correct_in_top3 = 0
-    total_groups = 0
-  
-    for group in groups:
-        if len(group) > 10:  # Filter condition
-            total_groups += 1
-            true_rank = get_true_rank(group)
-            pred_rank = get_predicted_rank(group)
-            if pred_rank <= 3:
-                correct_in_top3 += 1
-  
-    return correct_in_top3 / total_groups
+class Config:
+    # 数据路径配置
+    DATA_BASE_PATH = "你的数据根目录"
+    TRAIN_DATA_PATH = os.path.join(DATA_BASE_PATH, "encode/train")
+    TEST_DATA_PATH = os.path.join(DATA_BASE_PATH, "encode/test")
+    SUBMISSION_FILE_PATH = os.path.join(DATA_BASE_PATH, "submission_template.csv")
 ```
 
-## 💻 Resource Requirements
-
-### Software Stack
-
-* **Data Processing** : pandas, numpy, polars
-* **ML Libraries** : scikit-learn, xgboost, lightgbm
-* **Deep Learning** : tensorflow/pytorch, transformers
-* **Visualization** : matplotlib, seaborn, plotly
-* **Ranking** : rankpy, xlearn, tensorflow-ranking
-
-## 🚨 Risk Management
-
-### Technical Risks
-
-* **Data Quality Issues** : Implement robust validation
-* **Overfitting** : Strong cross-validation strategy
-* **Computational Limits** : Efficient algorithms and sampling
-* **Model Complexity** : Start simple, increase complexity gradually
-
-## 📝 Submission Format
-
-### Training Data
-
-```csv
-Id,ranker_id,selected
-100,abc123,0     # Flight option 1 - not chosen
-101,abc123,0     # Flight option 2 - not chosen
-102,abc123,1     # Flight option 3 - SELECTED by user
-103,abc123,0     # Flight option 4 - not chosen
+### 抽样参数配置
+```python
+# 抽样配置
+DEFAULT_NUM_GROUPS = 2000      # 每个文件抽取的ranker_id组数
+DEFAULT_MIN_GROUP_SIZE = 20    # 每组最小数据条数
+USE_SAMPLING = True            # 是否使用抽样
 ```
 
-### Submission Format
-
-```csv
-Id,ranker_id,selected
-100,abc123,4     # Rank 4 (worst option)
-101,abc123,2     # Rank 2 (second best)
-102,abc123,1     # Rank 1 (best - correct prediction!)
-103,abc123,3     # Rank 3 (third best)
+### 自动调参配置
+```python
+# 自动调参配置
+ENABLE_AUTO_TUNING = False     # 默认关闭自动调参
+AUTO_TUNING_TRIALS = 50        # 调参试验次数
+AUTO_TUNING_TIMEOUT = 3600     # 调参超时时间(秒)
 ```
 
-### Validation Requirements
+## 🎮 使用方法
 
-* Preserve exact row order as test.csv
-* Complete rankings for all flight options
-* Valid permutations (1, 2, 3, ..., N) within each group
-* No duplicate ranks per search session
-* Integer values ≥ 1
+### 基本使用
+```bash
+python main.py
+```
 
-## 🤝 Contributing
+### 交互式选项
+运行程序后，会出现交互式选择界面：
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
+1. **数据加载模式**
+   - 抽样模式：快速测试，适合开发调试
+   - 全量模式：使用所有数据，适合最终训练
 
-## 📜 License
+2. **模型选择**
+   - 可选择单个或多个模型
+   - 支持所有6种排序模型
 
-This project is licensed under the MIT License - see the [LICENSE](License) file for details.
+3. **自动调参**
+   - 可选择是否启用自动调参
+   - 可设置调参试验次数
 
-## 🎯 Competition Timeline
+### 编程式使用
+```python
+from src import FlightRankingAnalyzer, Config
 
-* **Data Exploration** : Weeks 1-2
-* **Feature Engineering** : Weeks 2-3
-* **Model Development** : Weeks 3-4
-* **Advanced Techniques** : Weeks 4-5
-* **Final Optimization** : Weeks 5-6
-* **Submission Deadline** : [Competition End Date]
+# 初始化分析器
+analyzer = FlightRankingAnalyzer(
+    use_gpu=True,
+    selected_models=['XGBRanker', 'LGBMRanker'],
+    enable_auto_tuning=True,
+    auto_tuning_trials=30
+)
 
-## 📞 Contact
+# 训练模型
+results = analyzer.full_analysis(
+    file_path="path/to/train_segment_0_encoded.parquet",
+    use_sampling=False  # 使用全量数据
+)
 
-* **Repository** : [https://github.com/dishijuntian/FR.git](https://github.com/dishijuntian/FR.git)
-* **Issues** : Use GitHub Issues for bug reports and feature requests
-* **Discussions** : Use GitHub Discussions for general questions
+# 预测
+prediction_file = analyzer.predict_test_data(
+    test_file_path="path/to/test_segment_0_encoded.parquet",
+    segment_idx=0
+)
+
+# 合并结果
+final_result = analyzer.merge_all_predictions(
+    prediction_files=[prediction_file],
+    submission_file="path/to/submission_template.csv",
+    output_file="final_predictions.parquet"
+)
+```
+
+## 📊 输出说明
+
+### 训练阶段输出
+- **模型性能比较**: 各模型的HitRate@3分数
+- **特征重要性图表**: Top 30重要特征的可视化
+- **SHAP分析图**: 模型决策的可解释性分析
+
+### 预测阶段输出
+- **预测文件**: 每个测试segment的预测结果
+  - 格式: `test_segment_X_encoded_predictions_train_segment_Y_encoded.parquet`
+  - 包含: Id, ranker_id, 各模型的分数和排名
+
+### 最终输出
+- **合并预测文件**: `final_predictions.parquet`
+  - 与submission模板对应的最终结果
+  - 包含集成预测和最终排名
+
+## ⚙️ 高级配置
+
+### 模型参数调整
+在 `src/config.py` 中修改 `DEFAULT_MODEL_PARAMS`:
+
+```python
+DEFAULT_MODEL_PARAMS = {
+    'XGBRanker': {
+        'n_estimators': 200,        # 树的数量
+        'learning_rate': 0.1,       # 学习率
+        'max_depth': 6,             # 最大深度
+        # ... 其他参数
+    }
+}
+```
+
+### 自动调参搜索空间
+在 `src/config.py` 中修改 `TUNING_SEARCH_SPACES`:
+
+```python
+TUNING_SEARCH_SPACES = {
+    'XGBRanker': {
+        'n_estimators': [50, 100, 200, 300],
+        'learning_rate': [0.01, 0.05, 0.1, 0.2],
+        # ... 其他参数范围
+    }
+}
+```
+
+## 🔧 故障排除
+
+### 常见问题
+
+1. **GPU不可用**
+   ```
+   解决方法: 检查CUDA安装，或在config.py中设置FORCE_USE_CPU=True
+   ```
+
+2. **内存不足**
+   ```
+   解决方法: 启用抽样模式，减少抽样组数，或增加系统内存
+   ```
+
+3. **文件路径错误**
+   ```
+   解决方法: 检查config.py中的路径配置，确保数据文件存在
+   ```
+
+4. **模型训练失败**
+   ```
+   解决方法: 检查数据格式，确保包含必需的列(Id, ranker_id, selected等)
+   ```
+
+### 性能优化建议
+
+1. **启用GPU加速**: 安装CUDA和相关库
+2. **合理设置抽样参数**: 平衡速度和准确性
+3. **选择关键模型**: 避免运行所有模型以节省时间
+4. **调整自动调参参数**: 根据时间预算设置试验次数
+
+## 📈 版本历史
+
+### v2.1 (当前版本)
+- ✨ 新增不抽样选项
+- ✨ 新增预测结果自动合并功能
+- ✨ 新增自动调参功能
+- 🔧 重构为模块化架构
+- 📝 完善文档和配置管理
+
+### v2.0
+- ✨ 支持多种排序模型
+- ✨ 特征重要性和SHAP分析
+- ✨ GPU加速支持
+
+## 🤝 贡献指南
+
+欢迎提交Issue和Pull Request来改进这个项目！
+
+## 📄 许可证
+
+本项目采用MIT许可证 - 详见LICENSE文件
+
+## 👥 团队
+
+Flight Ranking Team
+
+---
+
+如有问题或建议，请创建Issue或联系开发团队。
