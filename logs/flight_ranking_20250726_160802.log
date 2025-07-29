@@ -1,0 +1,247 @@
+2025-07-26 16:08:02,632 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-26 16:08:02,632 |     INFO | core.Core | 初始化DataProcessor: chunk_size=200000, n_processes=8
+2025-07-26 16:08:02,632 |     INFO | core.Core | ================================================================================
+2025-07-26 16:08:02,633 |     INFO | core.Core | 开始完整流水线执行
+2025-07-26 16:08:02,633 |     INFO | core.Core | ================================================================================
+2025-07-26 16:08:02,633 |     INFO | core.Core | ============================================================
+2025-07-26 16:08:02,633 |     INFO | core.Core | 开始数据处理阶段
+2025-07-26 16:08:02,634 |     INFO | core.Core | ============================================================
+2025-07-26 16:08:02,634 |     INFO | core.Core | 开始数据处理流水线
+2025-07-26 16:08:02,635 |     INFO | core.Core | 所有输出文件已存在
+2025-07-26 16:08:02,635 |     INFO | core.Core | 执行完整性验证...
+2025-07-26 16:08:02,635 |     INFO | core.Core | 开始验证分割结果...
+2025-07-26 16:08:27,383 |     INFO | core.Core | 验证结果:
+2025-07-26 16:08:27,390 |     INFO | core.Core |   原始数据: 18,145,372 行, 105,539 ranker_id
+2025-07-26 16:08:27,391 |     INFO | core.Core |   分割数据: 18,145,372 行, 105,539 ranker_id
+2025-07-26 16:08:27,391 |     INFO | core.Core |   行数匹配: True, ranker_id匹配: True
+2025-07-26 16:08:28,140 |     INFO | core.Core | 现有分割文件验证通过
+2025-07-26 16:08:28,141 |     INFO | core.Core | 开始验证分割结果...
+2025-07-26 16:08:31,679 |     INFO | core.Core | 验证结果:
+2025-07-26 16:08:31,680 |     INFO | core.Core |   原始数据: 6,897,776 行, 45,231 ranker_id
+2025-07-26 16:08:31,680 |     INFO | core.Core |   分割数据: 6,897,776 行, 45,231 ranker_id
+2025-07-26 16:08:31,680 |     INFO | core.Core |   行数匹配: True, ranker_id匹配: True
+2025-07-26 16:08:31,746 |     INFO | core.Core | 现有分割文件验证通过
+2025-07-26 16:08:31,746 |     INFO | core.Core | 验证通过，跳过处理
+2025-07-26 16:08:31,747 |     INFO | core.Core | 数据处理阶段完成
+2025-07-26 16:08:31,747 |     INFO | core.Core | ============================================================
+2025-07-26 16:08:31,747 |     INFO | core.Core | 开始模型训练阶段
+2025-07-26 16:08:31,747 |     INFO | core.Core | ============================================================
+2025-07-26 16:08:31,748 |     INFO | core.Core | 开始处理 segment_0
+2025-07-26 16:08:31,748 |     INFO | core.Core | 开始训练 segment_0 - 使用分层交叉验证
+2025-07-26 16:08:32,634 |     INFO | core.Core | 数据形状: (6126014, 126)
+2025-07-26 16:08:35,538 |     INFO | core.Core | 原始特征数: 121, 有效特征数: 117
+2025-07-26 16:08:40,154 |     INFO | core.Core | 特征数量: 117
+2025-07-26 16:08:43,104 |     INFO | core.Core | Unique ranker数量: 27625, 交叉验证折数: 10
+2025-07-26 16:08:43,110 |     INFO | core.Core | Fold 1/10
+2025-07-26 17:32:10,104 |     INFO | core.Core | 训练集: (5508690, 117), 验证集: (617324, 117)
+2025-07-26 17:58:51,522 |     INFO | core.Core | 训练集组数: 24862, 总样本数: 5508690
+2025-07-26 17:58:51,523 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-26 18:00:21,053 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.4546
+2025-07-26 18:00:21,054 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-26 18:01:53,485 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4437
+2025-07-26 18:01:53,486 |     INFO | core.Core | Fold 1 - XGBRanker: HitRate@3 = 0.4546
+2025-07-26 18:01:53,487 |     INFO | core.Core | Fold 1 - LGBMRanker: HitRate@3 = 0.4437
+2025-07-26 18:01:53,487 |     INFO | core.Core | Fold 2/10
+2025-07-26 18:34:37,305 |     INFO | core.Core | 训练集: (5529365, 117), 验证集: (596649, 117)
+2025-07-26 19:02:13,055 |     INFO | core.Core | 训练集组数: 24862, 总样本数: 5529365
+2025-07-26 19:02:13,065 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-26 19:03:41,201 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.4415
+2025-07-26 19:03:41,202 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-26 19:05:10,210 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4412
+2025-07-26 19:05:10,210 |     INFO | core.Core | Fold 2 - XGBRanker: HitRate@3 = 0.4415
+2025-07-26 19:05:10,211 |     INFO | core.Core | Fold 2 - LGBMRanker: HitRate@3 = 0.4412
+2025-07-26 19:05:10,211 |     INFO | core.Core | Fold 3/10
+2025-07-26 19:38:07,307 |     INFO | core.Core | 训练集: (5446001, 117), 验证集: (680013, 117)
+2025-07-26 20:05:26,307 |     INFO | core.Core | 训练集组数: 24862, 总样本数: 5446001
+2025-07-26 20:05:26,307 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-26 20:07:02,363 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.4455
+2025-07-26 20:07:02,363 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-26 20:08:44,038 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4463
+2025-07-26 20:08:44,039 |     INFO | core.Core | Fold 3 - XGBRanker: HitRate@3 = 0.4455
+2025-07-26 20:08:44,039 |     INFO | core.Core | Fold 3 - LGBMRanker: HitRate@3 = 0.4463
+2025-07-26 20:08:44,040 |     INFO | core.Core | Fold 4/10
+2025-07-26 20:48:08,352 |     INFO | core.Core | 训练集: (5518439, 117), 验证集: (607575, 117)
+2025-07-26 21:16:15,563 |     INFO | core.Core | 训练集组数: 24862, 总样本数: 5518439
+2025-07-26 21:16:15,563 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-26 21:16:20,185 |    ERROR | core.Core | 训练XGBRanker失败: bad allocation
+2025-07-26 21:16:20,196 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-26 21:17:49,279 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4311
+2025-07-26 21:17:49,280 |     INFO | core.Core | Fold 4 - LGBMRanker: HitRate@3 = 0.4311
+2025-07-26 21:17:49,281 |     INFO | core.Core | Fold 5/10
+2025-07-26 22:11:38,143 |     INFO | core.Core | 训练集: (5490306, 117), 验证集: (635708, 117)
+2025-07-27 00:11:47,092 |     INFO | core.Core | 训练集组数: 24862, 总样本数: 5490306
+2025-07-27 00:11:47,095 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 00:17:33,256 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.4759
+2025-07-27 00:17:33,257 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 00:23:55,793 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4455
+2025-07-27 00:23:55,796 |     INFO | core.Core | Fold 5 - XGBRanker: HitRate@3 = 0.4759
+2025-07-27 00:23:55,819 |     INFO | core.Core | Fold 5 - LGBMRanker: HitRate@3 = 0.4455
+2025-07-27 00:23:55,820 |     INFO | core.Core | Fold 6/10
+2025-07-27 01:24:12,715 |     INFO | core.Core | 训练集: (5542350, 117), 验证集: (583664, 117)
+2025-07-27 01:49:31,032 |     INFO | core.Core | 训练集组数: 24863, 总样本数: 5542350
+2025-07-27 01:49:31,032 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 01:49:45,378 |    ERROR | core.Core | 训练XGBRanker失败: [01:49:45] C:\buildkite-agent\builds\buildkite-windows-cpu-autoscaling-group-i-0fdc6d574b9c0d168-1\xgboost\xgboost-ci-windows\src\tree\updater_gpu_hist.cu:802: Exception in gpu_hist: [01:49:45] C:\buildkite-agent\builds\buildkite-windows-cpu-autoscaling-group-i-0fdc6d574b9c0d168-1\xgboost\xgboost-ci-windows\src\data\../common/device_helpers.cuh:431: Memory allocation error on worker 0: bad allocation: cudaErrorMemoryAllocation: out of memory
+- Free memory: 6053429248
+- Requested memory: 648454950
+
+
+2025-07-27 01:49:45,419 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 01:51:08,565 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.4471
+2025-07-27 01:51:08,566 |     INFO | core.Core | Fold 6 - LGBMRanker: HitRate@3 = 0.4471
+2025-07-27 01:51:08,566 |     INFO | core.Core | Fold 7/10
+2025-07-27 02:21:43,716 |    ERROR | core.Core | 训练 segment_0 失败: Unable to allocate 2.40 GiB for an array with shape (5495592, 117) and data type float32
+2025-07-27 02:21:43,986 |     INFO | core.Core | 开始处理 segment_1
+2025-07-27 02:21:43,987 |     INFO | core.Core | 开始训练 segment_1 - 使用分层交叉验证
+2025-07-27 02:21:48,009 |     INFO | core.Core | 数据形状: (10898020, 126)
+2025-07-27 02:21:48,900 |    ERROR | core.Core | 训练 segment_1 失败: Unable to allocate 4.75 GiB for an array with shape (117, 10898020) and data type int32
+2025-07-27 02:21:49,057 |     INFO | core.Core | 开始处理 segment_2
+2025-07-27 02:21:49,057 |     INFO | core.Core | 开始训练 segment_2 - 使用分层交叉验证
+2025-07-27 02:21:49,579 |     INFO | core.Core | 数据形状: (1120791, 126)
+2025-07-27 02:21:50,117 |     INFO | core.Core | 原始特征数: 121, 有效特征数: 117
+2025-07-27 02:21:51,250 |     INFO | core.Core | 特征数量: 117
+2025-07-27 02:21:51,758 |     INFO | core.Core | Unique ranker数量: 5652, 交叉验证折数: 8
+2025-07-27 02:21:51,759 |     INFO | core.Core | Fold 1/8
+2025-07-27 02:23:03,129 |     INFO | core.Core | 训练集: (980365, 117), 验证集: (140426, 117)
+2025-07-27 02:23:55,771 |     INFO | core.Core | 训练集组数: 4945, 总样本数: 980365
+2025-07-27 02:23:55,771 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:24:06,377 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6478
+2025-07-27 02:24:06,377 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:24:17,328 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6421
+2025-07-27 02:24:17,328 |     INFO | core.Core | Fold 1 - XGBRanker: HitRate@3 = 0.6478
+2025-07-27 02:24:17,329 |     INFO | core.Core | Fold 1 - LGBMRanker: HitRate@3 = 0.6421
+2025-07-27 02:24:17,329 |     INFO | core.Core | Fold 2/8
+2025-07-27 02:25:28,124 |     INFO | core.Core | 训练集: (976658, 117), 验证集: (144133, 117)
+2025-07-27 02:26:21,474 |     INFO | core.Core | 训练集组数: 4945, 总样本数: 976658
+2025-07-27 02:26:21,475 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:26:32,220 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6634
+2025-07-27 02:26:32,220 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:26:42,558 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6563
+2025-07-27 02:26:42,558 |     INFO | core.Core | Fold 2 - XGBRanker: HitRate@3 = 0.6634
+2025-07-27 02:26:42,559 |     INFO | core.Core | Fold 2 - LGBMRanker: HitRate@3 = 0.6563
+2025-07-27 02:26:42,559 |     INFO | core.Core | Fold 3/8
+2025-07-27 02:27:49,869 |     INFO | core.Core | 训练集: (980007, 117), 验证集: (140784, 117)
+2025-07-27 02:28:41,301 |     INFO | core.Core | 训练集组数: 4945, 总样本数: 980007
+2025-07-27 02:28:41,301 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:28:51,953 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.7016
+2025-07-27 02:28:51,953 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:29:01,829 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6888
+2025-07-27 02:29:01,829 |     INFO | core.Core | Fold 3 - XGBRanker: HitRate@3 = 0.7016
+2025-07-27 02:29:01,830 |     INFO | core.Core | Fold 3 - LGBMRanker: HitRate@3 = 0.6888
+2025-07-27 02:29:01,831 |     INFO | core.Core | Fold 4/8
+2025-07-27 02:30:12,502 |     INFO | core.Core | 训练集: (984411, 117), 验证集: (136380, 117)
+2025-07-27 02:31:10,411 |     INFO | core.Core | 训练集组数: 4945, 总样本数: 984411
+2025-07-27 02:31:10,412 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:31:21,182 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6704
+2025-07-27 02:31:21,182 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:31:32,008 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6521
+2025-07-27 02:31:32,009 |     INFO | core.Core | Fold 4 - XGBRanker: HitRate@3 = 0.6704
+2025-07-27 02:31:32,009 |     INFO | core.Core | Fold 4 - LGBMRanker: HitRate@3 = 0.6521
+2025-07-27 02:31:32,009 |     INFO | core.Core | Fold 5/8
+2025-07-27 02:32:42,496 |     INFO | core.Core | 训练集: (968137, 117), 验证集: (152654, 117)
+2025-07-27 02:33:35,020 |     INFO | core.Core | 训练集组数: 4946, 总样本数: 968137
+2025-07-27 02:33:35,021 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:33:45,816 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6813
+2025-07-27 02:33:45,817 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:33:56,160 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6686
+2025-07-27 02:33:56,161 |     INFO | core.Core | Fold 5 - XGBRanker: HitRate@3 = 0.6813
+2025-07-27 02:33:56,161 |     INFO | core.Core | Fold 5 - LGBMRanker: HitRate@3 = 0.6686
+2025-07-27 02:33:56,161 |     INFO | core.Core | Fold 6/8
+2025-07-27 02:35:03,810 |     INFO | core.Core | 训练集: (993251, 117), 验证集: (127540, 117)
+2025-07-27 02:35:56,954 |     INFO | core.Core | 训练集组数: 4946, 总样本数: 993251
+2025-07-27 02:35:56,954 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:36:07,302 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6799
+2025-07-27 02:36:07,303 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:36:16,833 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6700
+2025-07-27 02:36:16,834 |     INFO | core.Core | Fold 6 - XGBRanker: HitRate@3 = 0.6799
+2025-07-27 02:36:16,834 |     INFO | core.Core | Fold 6 - LGBMRanker: HitRate@3 = 0.6700
+2025-07-27 02:36:16,834 |     INFO | core.Core | Fold 7/8
+2025-07-27 02:37:26,662 |     INFO | core.Core | 训练集: (986371, 117), 验证集: (134420, 117)
+2025-07-27 02:38:24,261 |     INFO | core.Core | 训练集组数: 4946, 总样本数: 986371
+2025-07-27 02:38:24,262 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:38:35,109 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6941
+2025-07-27 02:38:35,109 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:38:45,922 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6983
+2025-07-27 02:38:45,922 |     INFO | core.Core | Fold 7 - XGBRanker: HitRate@3 = 0.6941
+2025-07-27 02:38:45,922 |     INFO | core.Core | Fold 7 - LGBMRanker: HitRate@3 = 0.6983
+2025-07-27 02:38:45,923 |     INFO | core.Core | Fold 8/8
+2025-07-27 02:39:55,725 |     INFO | core.Core | 训练集: (976337, 117), 验证集: (144454, 117)
+2025-07-27 02:40:48,631 |     INFO | core.Core | 训练集组数: 4946, 总样本数: 976337
+2025-07-27 02:40:48,631 |     INFO | core.Core | 正在训练 XGBRanker
+2025-07-27 02:40:59,391 |     INFO | core.Core | XGBRanker 训练完成 - HitRate@3: 0.6841
+2025-07-27 02:40:59,391 |     INFO | core.Core | 正在训练 LGBMRanker
+2025-07-27 02:41:09,649 |     INFO | core.Core | LGBMRanker 训练完成 - HitRate@3: 0.6771
+2025-07-27 02:41:09,650 |     INFO | core.Core | Fold 8 - XGBRanker: HitRate@3 = 0.6841
+2025-07-27 02:41:09,650 |     INFO | core.Core | Fold 8 - LGBMRanker: HitRate@3 = 0.6771
+2025-07-27 02:41:09,650 |     INFO | core.Core | Segment 2 交叉验证结果汇总:
+2025-07-27 02:41:09,654 |     INFO | core.Core | XGBRanker:
+2025-07-27 02:41:09,655 |     INFO | core.Core |   平均 HitRate@3: 0.6778 ± 0.0160
+2025-07-27 02:41:09,656 |     INFO | core.Core |   各fold结果: ['0.6478', '0.6634', '0.7016', '0.6704', '0.6813', '0.6799', '0.6941', '0.6841']
+2025-07-27 02:41:09,656 |     INFO | core.Core |   最佳 HitRate@3: 0.7016
+2025-07-27 02:41:09,656 |     INFO | core.Core | LGBMRanker:
+2025-07-27 02:41:09,656 |     INFO | core.Core |   平均 HitRate@3: 0.6692 ± 0.0176
+2025-07-27 02:41:09,657 |     INFO | core.Core |   各fold结果: ['0.6421', '0.6563', '0.6888', '0.6521', '0.6686', '0.6700', '0.6983', '0.6771']
+2025-07-27 02:41:09,657 |     INFO | core.Core |   最佳 HitRate@3: 0.6983
+2025-07-27 02:41:09,684 |     INFO | core.Core | 已保存最佳模型: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\XGBRanker_segment_2_best.pkl
+2025-07-27 02:41:09,697 |     INFO | core.Core | 已保存最佳模型: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\LGBMRanker_segment_2_best.pkl
+2025-07-27 02:41:09,700 |     INFO | core.Core | 已保存交叉验证结果: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\cv_results_segment_2.pkl
+2025-07-27 02:41:09,800 |     INFO | core.Core | 完成训练 segment_2
+2025-07-27 02:41:09,801 |     INFO | core.Core | 所有段的交叉验证结果汇总:
+2025-07-27 02:41:09,801 |     INFO | core.Core | SEGMENT_2:
+2025-07-27 02:41:09,802 |     INFO | core.Core |   XGBRanker:
+2025-07-27 02:41:09,802 |     INFO | core.Core |     平均 HitRate@3: 0.6778 ± 0.0160
+2025-07-27 02:41:09,802 |     INFO | core.Core |     最佳 HitRate@3: 0.7016
+2025-07-27 02:41:09,803 |     INFO | core.Core |   LGBMRanker:
+2025-07-27 02:41:09,804 |     INFO | core.Core |     平均 HitRate@3: 0.6692 ± 0.0176
+2025-07-27 02:41:09,804 |     INFO | core.Core |     最佳 HitRate@3: 0.6983
+2025-07-27 02:41:09,805 |     INFO | core.Core | 模型训练阶段完成
+2025-07-27 02:41:09,805 |     INFO | core.Core | ============================================================
+2025-07-27 02:41:09,806 |     INFO | core.Core | 开始模型预测阶段
+2025-07-27 02:41:09,806 |     INFO | core.Core | ============================================================
+2025-07-27 02:41:09,806 |     INFO | core.Core | 处理 segment_0
+2025-07-27 02:41:09,807 |     INFO | core.Core | 开始预测 segment_0 (集成方法: best_model)
+2025-07-27 02:41:10,132 |     INFO | core.Core | 测试数据形状: (2427225, 125)
+2025-07-27 02:41:10,779 |     INFO | core.Core | 原始特征数: 120, 有效特征数: 117
+2025-07-27 02:41:12,215 |  WARNING | core.Core | 未找到CV结果文件 d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\cv_results_segment_0.pkl
+2025-07-27 02:41:13,268 |     INFO | core.Core | 已加载模型: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\XGBRanker_segment_0.pkl
+2025-07-27 02:41:14,311 |     INFO | core.Core | XGBRanker 预测完成, 分数范围: [-4.3931, 4.8205]
+2025-07-27 02:51:15,047 |     INFO | core.Core | 预测完成，结果形状: (2427225, 4)
+2025-07-27 02:51:15,048 |     INFO | core.Core | 使用的模型: ['XGBRanker']
+2025-07-27 02:51:17,403 |     INFO | core.Core | 已保存预测结果: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\submissions\XGBRanker_segment_0_prediction.csv
+2025-07-27 02:51:17,403 |     INFO | core.Core | 处理 segment_1
+2025-07-27 02:51:17,403 |     INFO | core.Core | 开始预测 segment_1 (集成方法: best_model)
+2025-07-27 02:51:17,854 |     INFO | core.Core | 测试数据形状: (4111603, 125)
+2025-07-27 02:51:17,854 |    ERROR | core.Core | 预测 segment_1 失败: 特征文件不存在: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\features_segment_1.pkl
+2025-07-27 02:51:17,885 |     INFO | core.Core | 处理 segment_2
+2025-07-27 02:51:17,885 |     INFO | core.Core | 开始预测 segment_2 (集成方法: best_model)
+2025-07-27 02:51:17,975 |     INFO | core.Core | 测试数据形状: (358948, 125)
+2025-07-27 02:51:18,099 |     INFO | core.Core | 原始特征数: 120, 有效特征数: 117
+2025-07-27 02:51:22,635 |     INFO | core.Core | 已加载模型: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\models\XGBRanker_segment_2_best.pkl
+2025-07-27 02:51:22,769 |     INFO | core.Core | XGBRanker 预测完成, 分数范围: [-5.0985, 4.3836]
+2025-07-27 02:51:40,411 |     INFO | core.Core | 预测完成，结果形状: (358948, 4)
+2025-07-27 02:51:40,412 |     INFO | core.Core | 使用的模型: ['XGBRanker']
+2025-07-27 02:51:40,765 |     INFO | core.Core | 已保存预测结果: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\submissions\XGBRanker_segment_2_prediction.csv
+2025-07-27 02:51:43,335 |     INFO | core.Core | 预测完成
+2025-07-27 02:51:43,335 |     INFO | core.Core | 最终提交文件: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\submissions\XGBRanker_final_submission.csv
+2025-07-27 02:51:43,335 |     INFO | core.Core | 总记录数: 2786173
+2025-07-27 02:51:43,489 |     INFO | core.Core | 唯一ranker_id数量: 12116
+2025-07-27 02:51:43,489 |     INFO | core.Core | 集成方法: best_model
+2025-07-27 02:51:43,490 |     INFO | core.Core | 使用模型: ['XGBRanker']
+2025-07-27 02:51:43,490 |     INFO | core.Core | 各段预测统计:
+2025-07-27 02:51:43,490 |     INFO | core.Core |   segment_0: 2427225 条记录, 10102 个ranker
+2025-07-27 02:51:43,490 |     INFO | core.Core |     分数分布: 均值=-0.4002, 标准差=1.4580
+2025-07-27 02:51:43,491 |     INFO | core.Core |   segment_2: 358948 条记录, 2014 个ranker
+2025-07-27 02:51:43,491 |     INFO | core.Core |     分数分布: 均值=-2.6550, 标准差=1.7600
+2025-07-27 02:51:43,491 |     INFO | core.Core | 验证预测结果
+2025-07-27 03:10:41,034 |     INFO | core.Core | 排名有效性: 12116/12116 (100.0%)
+2025-07-27 03:10:41,036 |     INFO | core.Core | 随机抽样检查 (5 个ranker)
+2025-07-27 03:10:41,136 |     INFO | core.Core | ranker_id 6c87c20a61ca4a5784a27c1e5d412ced: 有效 (选项数: 25)
+2025-07-27 03:10:41,234 |     INFO | core.Core | ranker_id 8ac75742664d4410aff1195f6a03ffce: 有效 (选项数: 12)
+2025-07-27 03:10:41,329 |     INFO | core.Core | ranker_id 9840169f1ab4456da016c69acc4276fc: 有效 (选项数: 3)
+2025-07-27 03:10:41,421 |     INFO | core.Core | ranker_id ca1f63dcab274641b82651a7729fd30a: 有效 (选项数: 419)
+2025-07-27 03:10:41,514 |     INFO | core.Core | ranker_id 4735f242345c4a179628c08707d9c833: 有效 (选项数: 36)
+2025-07-27 03:10:41,891 |     INFO | core.Core | 预测报告已保存: d:\kaggle\filght\data\aeroclub-recsys-2025\segmented\data\aeroclub-recsys-2025\submissions\XGBRanker_prediction_report.txt
+2025-07-27 03:10:41,900 |     INFO | core.Core | 模型预测阶段完成
+2025-07-27 03:10:41,905 |     INFO | core.Core | ================================================================================
+2025-07-27 03:10:41,905 |     INFO | core.Core | 完整流水线执行成功!
+2025-07-27 03:10:41,905 |     INFO | core.Core | 总耗时: 11:02:39.271978
+2025-07-27 03:10:41,905 |     INFO | core.Core | ================================================================================

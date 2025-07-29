@@ -1,0 +1,2 @@
+2025-07-29 09:56:19,570 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-29 09:56:19,570 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8

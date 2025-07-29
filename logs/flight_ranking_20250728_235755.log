@@ -1,0 +1,50 @@
+2025-07-28 23:57:55,588 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-28 23:57:55,588 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-28 23:57:55,588 |     INFO | core.Core | 预测器初始化: GPU=None
+2025-07-28 23:57:55,588 |     INFO | core.Core | 航班排名系统核心控制器初始化完成
+2025-07-28 23:57:55,589 |     INFO | core.Core | ================================================================================
+2025-07-28 23:57:55,589 |     INFO | core.Core | 开始完整流水线执行
+2025-07-28 23:57:55,589 |     INFO | core.Core | ================================================================================
+2025-07-28 23:57:55,598 |     INFO | core.Core | ============================================================
+2025-07-28 23:57:55,599 |     INFO | core.Core | 开始数据处理阶段
+2025-07-28 23:57:55,599 |     INFO | core.Core | ============================================================
+2025-07-28 23:57:55,599 |     INFO | core.Core | 开始数据处理流水线
+2025-07-28 23:57:55,600 |     INFO | core.Core | 开始处理 TRAIN 数据
+2025-07-28 23:57:55,600 |     INFO | core.Core | 编码文件已存在，跳过: data\aeroclub-recsys-2025\encoded\train\train_encoded.parquet
+2025-07-28 23:57:55,600 |     INFO | core.Core | encode_data 耗时: 0.00s
+2025-07-28 23:57:55,600 |     INFO | core.Core | 分割文件已存在，跳过
+2025-07-28 23:57:55,601 |     INFO | core.Core | 开始验证分割结果...
+2025-07-28 23:58:03,210 |     INFO | core.Core | 验证结果:
+2025-07-28 23:58:03,211 |     INFO | core.Core |   原始数据: 18,145,372 行, 105,539 ranker_id
+2025-07-28 23:58:03,212 |     INFO | core.Core |   分割数据: 18,075,751 行, 90,728 ranker_id
+2025-07-28 23:58:03,213 |     INFO | core.Core |   行数匹配: False, ranker_id匹配: False
+2025-07-28 23:58:03,214 |  WARNING | core.Core | 行数差异: 69621 行
+2025-07-28 23:58:03,215 |  WARNING | core.Core | ranker_id差异: 14811 个
+2025-07-28 23:58:04,468 |  WARNING | core.Core | 略过 Train 数据集完整性验证
+2025-07-28 23:58:04,469 |     INFO | core.Core | segment_data 耗时: 8.87s
+2025-07-28 23:58:04,470 |     INFO | core.Core | TRAIN 数据处理完成
+2025-07-28 23:58:04,472 |     INFO | core.Core | process_data_type 耗时: 8.87s
+2025-07-28 23:58:04,472 |     INFO | core.Core | 开始处理 TEST 数据
+2025-07-28 23:58:04,473 |     INFO | core.Core | 编码文件已存在，跳过: data\aeroclub-recsys-2025\encoded\test\test_encoded.parquet
+2025-07-28 23:58:04,474 |     INFO | core.Core | encode_data 耗时: 0.00s
+2025-07-28 23:58:04,475 |     INFO | core.Core | 开始分割 test 数据
+2025-07-28 23:58:04,504 |     INFO | core.Core | 输入: 6,897,776 行, 105.5MB
+2025-07-28 23:58:04,505 |     INFO | core.Core | 开始分割处理 data\aeroclub-recsys-2025\encoded\test\test_encoded.parquet
+2025-07-28 23:58:04,517 |     INFO | core.Core | 创建了 7 个批次
+2025-07-28 23:58:04,518 |    ERROR | core.Core | 分割处理异常: cannot access local variable 'ranker_classification' where it is not associated with a value
+2025-07-28 23:58:04,521 |    ERROR | core.Core | 详细错误:
+Traceback (most recent call last):
+  File "D:\kaggle\filght\src\data\DataSegment.py", line 295, in process_file
+    segment_ranker_ids = ranker_classification[segment_level]
+                         ^^^^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'ranker_classification' where it is not associated with a value
+
+2025-07-28 23:58:04,523 |    ERROR | core.Core | 分割异常: cannot access local variable 'ranker_classification' where it is not associated with a value
+2025-07-28 23:58:04,524 |     INFO | core.Core | segment_data 耗时: 0.05s
+2025-07-28 23:58:04,525 |     INFO | core.Core | process_data_type 耗时: 0.05s
+2025-07-28 23:58:04,526 |    ERROR | core.Core | test 处理失败
+2025-07-28 23:58:04,528 |     INFO | core.Core | process_pipeline 耗时: 8.93s
+2025-07-28 23:58:04,528 |    ERROR | core.Core | ✗ 数据处理阶段失败
+2025-07-28 23:58:04,530 |     INFO | core.Core | run_data_processing 耗时: 8.93s
+2025-07-28 23:58:04,531 |    ERROR | core.Core | 数据处理失败，终止流水线
+2025-07-28 23:58:04,532 |     INFO | core.Core | run_full_pipeline 耗时: 8.94s

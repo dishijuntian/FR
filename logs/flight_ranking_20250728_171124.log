@@ -1,0 +1,61 @@
+2025-07-28 17:11:24,764 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-28 17:11:24,765 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-28 17:11:24,766 |     INFO | core.Core | 预测器初始化: GPU=None
+2025-07-28 17:11:24,766 |     INFO | core.Core | 航班排名系统核心控制器初始化完成
+2025-07-28 17:11:24,767 |     INFO | core.Core | ================================================================================
+2025-07-28 17:11:24,767 |     INFO | core.Core | 开始完整流水线执行
+2025-07-28 17:11:24,768 |     INFO | core.Core | ================================================================================
+2025-07-28 17:11:24,768 |     INFO | core.Core | ============================================================
+2025-07-28 17:11:24,769 |     INFO | core.Core | 开始数据处理阶段
+2025-07-28 17:11:24,769 |     INFO | core.Core | ============================================================
+2025-07-28 17:11:24,770 |     INFO | core.Core | 开始数据处理流水线
+2025-07-28 17:11:24,771 |     INFO | core.Core | 开始处理 TRAIN 数据
+2025-07-28 17:11:24,771 |     INFO | core.Core | 编码文件已存在，跳过: data\aeroclub-recsys-2025\encoded\train\train_encoded.parquet
+2025-07-28 17:11:24,772 |     INFO | core.Core | encode_data 耗时: 0.00s
+2025-07-28 17:11:24,772 |     INFO | core.Core | 开始分割 train 数据
+2025-07-28 17:11:24,781 |     INFO | core.Core | 输入: 18,145,372 行, 287.2MB
+2025-07-28 17:11:24,781 |     INFO | core.Core | 开始分割处理 data\aeroclub-recsys-2025\encoded\train\train_encoded.parquet
+2025-07-28 17:11:24,782 |     INFO | core.Core | 开始预扫描文件进行ranker_id分类...
+2025-07-28 17:24:27,344 |     INFO | core.Core | 已处理 10 批次，发现 14063 个ranker_id
+2025-07-28 17:29:42,808 |     INFO | core.Core | 已处理 20 批次，发现 26207 个ranker_id
+2025-07-28 17:33:43,391 |     INFO | core.Core | 已处理 30 批次，发现 36445 个ranker_id
+2025-07-28 17:37:28,626 |     INFO | core.Core | 已处理 40 批次，发现 46006 个ranker_id
+2025-07-28 17:41:31,328 |     INFO | core.Core | 已处理 50 批次，发现 56044 个ranker_id
+2025-07-28 17:45:16,846 |     INFO | core.Core | 已处理 60 批次，发现 65723 个ranker_id
+2025-07-28 17:50:14,241 |     INFO | core.Core | 已处理 70 批次，发现 78434 个ranker_id
+2025-07-28 17:55:26,319 |     INFO | core.Core | 已处理 80 批次，发现 91723 个ranker_id
+2025-07-28 18:00:27,304 |     INFO | core.Core | 已处理 90 批次，发现 104646 个ranker_id
+2025-07-28 18:00:42,865 |     INFO | core.Core | 分类完成，总计 105539 个ranker_id:
+2025-07-28 18:00:42,865 |     INFO | core.Core |   Segment 3: 7 个ranker_id
+2025-07-28 18:00:42,865 |     INFO | core.Core |   Segment 2: 5652 个ranker_id
+2025-07-28 18:00:42,865 |     INFO | core.Core |   Segment 1: 72255 个ranker_id
+2025-07-28 18:00:42,865 |     INFO | core.Core |   Segment 0: 27625 个ranker_id
+2025-07-28 18:00:42,871 |     INFO | core.Core | 创建了 18 个批次
+2025-07-28 18:00:42,871 |     INFO | core.Core | 处理 segment_3 级别数据，包含 7 个ranker_id...
+2025-07-28 18:00:58,167 |     INFO | core.Core | 剔除 4 个恒定值列: ['bySelf', 'nationality', 'isVip', 'pricingInfo_passengerCount']
+2025-07-28 18:00:58,173 |     INFO | core.Core | 按ranker_id分组过滤: 移除 0 行（0 个组）
+2025-07-28 18:00:58,174 |    ERROR | core.Core | 分割处理异常: 'id'
+2025-07-28 18:00:58,180 |    ERROR | core.Core | 详细错误:
+Traceback (most recent call last):
+  File "D:\kaggle\filght\src\data\DataSegment.py", line 360, in process_file
+    segment_row_count = self._merge_temp_files(data_type, segment_level, temp_files, output_dir)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\kaggle\filght\src\data\DataSegment.py", line 188, in _merge_temp_files
+    final_df = filtered_df.sort_values(by='id')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jacky\anaconda3\envs\torch\Lib\site-packages\pandas\core\frame.py", line 7189, in sort_values
+    k = self._get_label_or_level_values(by[0], axis=axis)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jacky\anaconda3\envs\torch\Lib\site-packages\pandas\core\generic.py", line 1911, in _get_label_or_level_values
+    raise KeyError(key)
+KeyError: 'id'
+
+2025-07-28 18:00:58,181 |    ERROR | core.Core | 分割异常: 'id'
+2025-07-28 18:00:58,187 |     INFO | core.Core | segment_data 耗时: 2973.42s
+2025-07-28 18:00:58,187 |     INFO | core.Core | process_data_type 耗时: 2973.42s
+2025-07-28 18:00:58,188 |    ERROR | core.Core | train 处理失败
+2025-07-28 18:00:58,188 |     INFO | core.Core | process_pipeline 耗时: 2973.42s
+2025-07-28 18:00:58,188 |    ERROR | core.Core | ✗ 数据处理阶段失败
+2025-07-28 18:00:58,188 |     INFO | core.Core | run_data_processing 耗时: 2973.42s
+2025-07-28 18:00:58,188 |    ERROR | core.Core | 数据处理失败，终止流水线
+2025-07-28 18:00:58,189 |     INFO | core.Core | run_full_pipeline 耗时: 2973.42s

@@ -1,0 +1,120 @@
+2025-07-29 10:40:56,254 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-29 10:40:56,254 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-29 10:40:56,277 |     INFO | core.Core | GPU加速可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:40:56,277 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 10:40:56,278 |     INFO | core.Core | GPU模式: 使用单进程训练避免GPU竞争
+2025-07-29 10:40:56,278 |     INFO | core.Core | 训练器初始化完成
+2025-07-29 10:40:56,278 |     INFO | core.Core | 训练模式: GPU加速 + 串行fold训练
+2025-07-29 10:40:56,278 |     INFO | core.Core | GPU推理可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:40:56,278 |     INFO | core.Core | GPU推理设置已优化
+2025-07-29 10:40:56,278 |     INFO | core.Core | 推理批次大小: 3072
+2025-07-29 10:40:56,279 |     INFO | core.Core | 预测器初始化完成
+2025-07-29 10:40:56,279 |     INFO | core.Core | 核心控制器初始化完成
+2025-07-29 10:40:56,279 |     INFO | core.Core | 开始完整流水线执行
+2025-07-29 10:40:56,279 |     INFO | core.Core | 开始数据处理
+2025-07-29 10:40:56,280 |     INFO | core.Core | 开始数据处理流水线
+2025-07-29 10:40:56,280 |     INFO | core.Core | 所有输出文件已存在
+2025-07-29 10:40:56,280 |     INFO | core.Core | process_pipeline 耗时: 0.00s
+2025-07-29 10:40:56,281 |     INFO | core.Core | ✓ 数据处理完成
+2025-07-29 10:40:56,281 |     INFO | core.Core | 开始模型训练
+2025-07-29 10:40:56,281 |     INFO | core.Core | ✓ 训练数据检查通过: [0, 1, 2]
+2025-07-29 10:40:56,281 |     INFO | core.Core | 开始训练所有段: [0, 1, 2]
+2025-07-29 10:40:56,282 |     INFO | core.Core | 使用模型: ['XGBRanker', 'LGBMRanker', 'RankNet']
+2025-07-29 10:40:56,282 |     INFO | core.Core | 
+==================================================
+2025-07-29 10:40:56,282 |     INFO | core.Core | 训练 segment_0
+2025-07-29 10:40:56,282 |     INFO | core.Core | ==================================================
+2025-07-29 10:40:56,282 |     INFO | core.Core | 开始CV训练 segment_0
+2025-07-29 10:40:56,713 |     INFO | core.Core | 加载 segment_0: (6089760, 52)
+2025-07-29 10:40:56,713 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:40:56,713 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 10:41:07,490 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-29 10:41:07,491 |     INFO | core.Core | 训练 XGBRanker with CV
+2025-07-29 10:41:07,491 |     INFO | core.Core | GPU串行训练 5 个fold
+2025-07-29 10:41:07,815 |     INFO | core.Core | 训练 XGBRanker
+2025-07-29 10:41:07,816 |     INFO | core.Core | GPU设置已优化
+2025-07-29 10:41:07,816 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:07,816 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 10:41:07,817 |     INFO | core.Core | GPU模式：简化 XGBRanker 超参数优化
+2025-07-29 10:41:07,817 |     INFO | core.Core | 创建优化研究: flight_ranking_optimization
+2025-07-29 10:41:07,817 |     INFO | core.Core | 开始超参数优化，trials: 20
+2025-07-29 10:41:12,655 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-29 10:41:12,656 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:12,656 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 10:41:12,657 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:13,189 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 10:41:13,189 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 10:41:13,190 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:13,641 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 10:41:13,641 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 10:41:13,642 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:14,568 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 10:41:14,568 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:41:14,581 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 10:52:27,818 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 10:52:28,366 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:52:28,367 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 10:52:28,367 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:52:28,892 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 10:52:28,894 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 10:52:28,894 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:52:29,104 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 10:52:29,105 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 10:52:29,105 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:52:29,110 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 10:52:29,111 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 10:52:29,129 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 11:20:15,580 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 11:20:39,026 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-29 11:20:39,028 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 11:20:39,028 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 11:20:39,029 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 11:20:39,673 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 11:20:39,675 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 11:20:39,676 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 11:20:40,036 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 11:20:40,036 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 11:20:40,037 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 11:20:40,043 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 11:20:40,044 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 11:20:40,170 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 12:03:06,453 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 12:03:06,874 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 12:03:06,875 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 12:03:06,875 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 12:03:07,073 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 12:03:07,074 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 12:03:07,074 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 12:03:07,212 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 12:03:07,213 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 12:03:07,213 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 12:03:07,216 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 12:03:07,216 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 12:03:07,231 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 14:15:43,643 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 14:15:49,370 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-29 14:15:49,371 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:15:49,372 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 14:15:49,372 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:15:49,935 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 14:15:49,936 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 14:15:49,936 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:15:50,095 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 14:15:50,096 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 14:15:50,097 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:15:50,100 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 14:15:50,101 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:15:50,159 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 14:30:46,975 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 14:30:47,838 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:30:47,838 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 14:30:47,838 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:30:48,158 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 14:30:48,159 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 14:30:48,159 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:30:48,341 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 14:30:48,341 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 14:30:48,342 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:30:48,344 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 14:30:48,344 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:30:48,357 |     INFO | core.Core | ✓ Transformer模型创建成功
