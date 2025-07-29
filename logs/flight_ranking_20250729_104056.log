@@ -118,3 +118,17 @@
 2025-07-29 14:30:48,344 |     INFO | core.Core | ✓ RankNet模型创建成功
 2025-07-29 14:30:48,344 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
 2025-07-29 14:30:48,357 |     INFO | core.Core | ✓ Transformer模型创建成功
+2025-07-29 14:43:56,333 |     INFO | src.model.Models | XGBoost训练完成
+2025-07-29 14:44:03,737 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-29 14:44:03,738 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:44:03,738 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-29 14:44:03,738 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:44:04,142 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-29 14:44:04,143 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-29 14:44:04,144 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:44:04,301 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-29 14:44:04,301 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-29 14:44:04,302 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:44:04,305 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-29 14:44:04,305 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-29 14:44:04,374 |     INFO | core.Core | ✓ Transformer模型创建成功
