@@ -70,13 +70,7 @@ class FlightRankingCore:
         
         # 模型训练器
         self.model_trainer = FlightRankingTrainer(
-            data_path=self.config['paths']['model_input_dir'],
-            model_save_path=self.config['paths']['model_save_dir'],
-            use_gpu=training_config.get('use_gpu', True),
-            enable_parallel=training_config.get('enable_parallel', True),
-            enable_optimization=training_config.get('enable_optimization', True),
-            n_folds=training_config.get('n_folds', 5),
-            random_state=training_config.get('random_state', 42),
+            config=self.config,
             logger=self.logger
         )
         
@@ -88,12 +82,7 @@ class FlightRankingCore:
         
         # 模型预测器
         self.model_predictor = FlightRankingPredictor(
-            data_path=self.config['paths']['model_input_dir'],
-            model_save_path=self.config['paths']['model_save_dir'],
-            output_path=self.config['paths']['output_dir'],
-            use_gpu=prediction_config.get('use_gpu', True),
-            enable_parallel=prediction_config.get('enable_parallel', True),
-            enable_business_rules=prediction_config.get('enable_business_rules', False),
+            config=self.config,
             logger=self.logger
         )
     
@@ -129,11 +118,7 @@ class FlightRankingCore:
             if not self._check_training_data(segments):
                 return False
             
-            results = self.model_trainer.train_all_segments(
-                segments=segments,
-                model_names=model_names,
-                model_configs=self.config.get('training', {}).get('model_configs', {})
-            )
+            results = self.model_trainer.train_all_segments()
             
             success = len(results) > 0
             if success:
@@ -159,10 +144,7 @@ class FlightRankingCore:
             if not self._check_prediction_data(segments):
                 return False
             
-            results = self.model_predictor.predict_all_segments(
-                segments=segments,
-                model_names=model_names
-            )
+            results = self.model_predictor.predict_all_segments()
             
             success = results is not None and len(results) > 0
             if success:
@@ -250,24 +232,3 @@ class FlightRankingCore:
         
         self.logger.info(f"✓ 预测数据检查通过: {segments}")
         return True
-    
-    def get_status(self) -> Dict[str, Any]:
-        """获取系统状态"""
-        status = {
-            'config_loaded': True,
-            'data_processor': hasattr(self, 'data_processor'),
-            'model_trainer': hasattr(self, 'model_trainer'),
-            'model_predictor': hasattr(self, 'model_predictor'),
-            'gpu_available': self.model_trainer.use_gpu if hasattr(self, 'model_trainer') else False
-        }
-        
-        # 检查数据文件
-        data_path = Path(self.config['paths']['data_dir'])
-        status['train_data'] = list((data_path / "train").glob("*.parquet")) if (data_path / "train").exists() else []
-        status['test_data'] = list((data_path / "test").glob("*.parquet")) if (data_path / "test").exists() else []
-        
-        # 检查模型文件
-        model_path = Path(self.config['paths']['model_save_dir'])
-        status['models'] = list(model_path.glob("segment_*/*.pkl")) if model_path.exists() else []
-        
-        return status

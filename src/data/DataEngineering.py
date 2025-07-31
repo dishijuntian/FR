@@ -3,65 +3,96 @@
 """
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union
+import os
 import gc
+from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+import pyarrow.parquet as pq
+from datetime import datetime
 
-from src.utils.Common import timer, memory_monitor
-from src.utils.DataUtils import DataUtils
+from src.utils.Common import timer
 from src.utils.MemoryUtils import MemoryUtils
 
 
-class FeatureEngineering:
-    """特征工程类"""
+class DataEngineering:
+    """数据工程主类"""
     
     def __init__(self, logger=None):
         self.logger = logger
-        self.feature_configs = {}
+        self.processing_stats = {}
     
     @timer
-    @memory_monitor
-    def create_flight_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """创建航班相关特征"""
+    def create_core_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建核心特征（基于d.py逻辑优化）"""
         df = df.copy()
         
-        # 航班连接数特征
+        # 1. 价格特征
+        if 'taxes_bin' in df.columns and 'totalPrice_bin' in df.columns:
+            df['tax_rate'] = df['taxes_bin'] / (df['totalPrice_bin'] + 1)
+            df['log_price_proxy'] = np.log1p(df['totalPrice_bin'])
+        
+        # 2. 持续时间特征
+        duration_cols = ['legs0_duration', 'legs1_duration']
+        existing_duration_cols = [col for col in duration_cols if col in df.columns]
+        
+        if len(existing_duration_cols) >= 2:
+            df['total_duration'] = df['legs0_duration'].fillna(0) + df['legs1_duration'].fillna(0)
+            df['duration_ratio'] = np.where(
+                df['legs1_duration'].fillna(0) > 0,
+                df['legs0_duration'] / (df['legs1_duration'] + 1),
+                1.0
+            )
+        elif 'legs0_duration' in df.columns:
+            df['total_duration'] = df['legs0_duration'].fillna(0)
+            df['duration_ratio'] = 1.0
+        
+        # 3. 行程类型特征
+        if 'legs1_duration' in df.columns:
+            df['is_one_way'] = (
+                (df['legs1_duration'] == -1) | 
+                (df['legs1_duration'] == 0) |
+                (df['legs1_duration'].isna())
+            ).astype('int8')
+        else:
+            df['is_one_way'] = 1
+        
+        # 4. 航班段数统计
         for leg in [0, 1]:
-            segments_cols = [col for col in df.columns if f'legs{leg}_segments' in col and 'flightNumber' in col]
-            df[f'legs{leg}_segments_count'] = (df[segments_cols] != -1).sum(axis=1)
+            segment_cols = [col for col in df.columns 
+                           if f'legs{leg}_segments' in col and 'flightNumber' in col and col in df.columns]
+            if segment_cols:
+                df[f'n_segments_leg{leg}'] = (df[segment_cols] != -1).sum(axis=1).astype('int8')
+            else:
+                df[f'n_segments_leg{leg}'] = 0
         
-        # 航班时间特征
-        for leg in [0, 1]:
-            dep_col = f'legs{leg}_departureAt'
-            arr_col = f'legs{leg}_arrivalAt'
-            
-            if dep_col in df.columns and arr_col in df.columns:
-                # 转换为小时
-                df[f'legs{leg}_departure_hour'] = (df[dep_col] % 86400) // 3600
-                df[f'legs{leg}_arrival_hour'] = (df[arr_col] % 86400) // 3600
-                
-                # 是否为红眼航班（深夜起飞或早晨到达）
-                df[f'legs{leg}_is_redeye'] = (
-                    (df[f'legs{leg}_departure_hour'] >= 22) | 
-                    (df[f'legs{leg}_arrival_hour'] <= 6)
-                ).astype(int)
+        # 5. 常旅客特征
+        if 'frequentFlyer' in df.columns:
+            # 注意：原始数据已被哈希编码，这里基于是否为-1判断
+            df['has_frequent_flyer'] = (df['frequentFlyer'] != -1).astype('int8')
         
-        return df
-    
-    @timer
-    def create_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """创建价格相关特征"""
-        df = df.copy()
+        # 6. 二值特征
+        binary_features = [
+            ('corporateTariffCode', 'has_corporate_tariff'),
+            ('pricingInfo_isAccessTP', 'has_access_tp'),
+            ('isVip', 'is_vip'),
+        ]
         
-        # 价格分箱特征已在DataEncode中处理
+        for source_col, target_col in binary_features:
+            if source_col in df.columns:
+                df[target_col] = ((df[source_col] == 1) | (df[source_col] != -1)).astype('int8')
         
-        # 价格相对特征（如果有多个选项的话）
-        if 'ranker_id' in df.columns:
-            # 组内价格排名（按ranker_id分组）
-            price_cols = [col for col in df.columns if 'price' in col.lower() and '_bin' in col]
-            
-            for price_col in price_cols:
-                df[f'{price_col}_rank'] = df.groupby('ranker_id')[price_col].rank(method='dense').astype('int8')
-                df[f'{price_col}_is_cheapest'] = (df[f'{price_col}_rank'] == 1).astype('int8')
+        # 7. 取消/改签规则特征
+        if 'miniRules0_monetaryAmount' in df.columns and 'miniRules0_statusInfos' in df.columns:
+            df['free_cancel'] = (
+                (df['miniRules0_monetaryAmount'] == 0) & 
+                (df['miniRules0_statusInfos'] == 1)
+            ).astype('int8')
+        
+        if 'miniRules1_monetaryAmount' in df.columns and 'miniRules1_statusInfos' in df.columns:
+            df['free_exchange'] = (
+                (df['miniRules1_monetaryAmount'] == 0) & 
+                (df['miniRules1_statusInfos'] == 1)
+            ).astype('int8')
         
         return df
     
@@ -70,55 +101,178 @@ class FeatureEngineering:
         """创建路线相关特征"""
         df = df.copy()
         
-        # 机场特征
-        airport_cols = [col for col in df.columns if 'airport' in col and 'iata' in col]
+        # 航线特征（基于哈希值无法直接判断，使用编码后的值）
+        if 'is_round_trip' in df.columns:
+            # 这个特征在DataEncode中已经创建
+            pass
+        elif 'searchRoute' in df.columns:
+            # 如果searchRoute还存在（未被删除）
+            popular_routes = ['MOWLED/LEDMOW', 'LEDMOW/MOWLED', 'MOWLED', 'LEDMOW']
+            df['is_popular_route'] = df['searchRoute'].isin(popular_routes).astype('int8')
         
-        # 机场代码频次编码
-        for col in airport_cols:
-            if col in df.columns:
-                # 计算机场出现频次
-                airport_counts = df[col].value_counts()
-                df[f'{col}_frequency'] = df[col].map(airport_counts).fillna(0).astype('int16')
+        # 舱位等级特征
+        cabin_cols = [col for col in df.columns if 'cabinClass' in col and col in df.columns]
+        if len(cabin_cols) >= 2:
+            # 计算平均舱位等级
+            df['avg_cabin_class'] = df[cabin_cols].replace(-1, np.nan).mean(axis=1, skipna=True).fillna(0)
         
-        # 航线类型特征
-        for leg in [0, 1]:
-            dep_col = f'legs{leg}_segments0_departureFrom_airport_city_iata'
-            arr_col = f'legs{leg}_segments0_arrivalTo_airport_city_iata'
+        # 直飞特征
+        if 'n_segments_leg0' in df.columns:
+            df['is_direct_leg0'] = (df['n_segments_leg0'] == 1).astype('int8')
+        
+        if 'n_segments_leg1' in df.columns and 'is_one_way' in df.columns:
+            df['is_direct_leg1'] = np.where(
+                df['is_one_way'] == 1, 
+                0, 
+                (df['n_segments_leg1'] == 1).astype('int8')
+            )
+        
+        # 总段数
+        if 'n_segments_leg0' in df.columns and 'n_segments_leg1' in df.columns:
+            df['total_segments'] = df['n_segments_leg0'] + df['n_segments_leg1']
             
-            if dep_col in df.columns and arr_col in df.columns:
-                # 是否为同城航线
-                df[f'legs{leg}_is_same_city'] = (df[dep_col] == df[arr_col]).astype('int8')
+            # 都是直飞
+            if 'is_direct_leg0' in df.columns and 'is_direct_leg1' in df.columns:
+                df['both_direct'] = (df['is_direct_leg0'] & df['is_direct_leg1']).astype('int8')
         
         return df
     
     @timer
-    def create_temporal_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def create_time_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """创建时间相关特征"""
         df = df.copy()
         
-        # 请求时间特征
-        if 'requestDate' in df.columns:
-            # 转换为时间戳再转回时间特征
-            request_ts = df['requestDate']
-            
-            # 提取时间特征
-            df['request_hour'] = ((request_ts % 86400) // 3600).astype('int8')
-            df['request_day_of_week'] = ((request_ts // 86400 + 4) % 7).astype('int8')  # 1970-01-01是周四
-            df['request_is_weekend'] = (df['request_day_of_week'] >= 5).astype('int8')
+        # 处理时间戳格式的时间列
+        time_cols = ['legs0_departureAt', 'legs0_arrivalAt', 'legs1_departureAt', 'legs1_arrivalAt']
+        
+        for col in time_cols:
+            if col in df.columns:
+                # 时间戳转小时（假设-1表示缺失）
+                valid_mask = df[col] != -1
+                df[f'{col}_hour'] = np.where(
+                    valid_mask,
+                    (df[col] % 86400) // 3600,  # Unix时间戳转小时
+                    12  # 默认值
+                ).astype('int8')
+                
+                # 工作日（简化处理，基于时间戳）
+                df[f'{col}_weekday'] = np.where(
+                    valid_mask,
+                    ((df[col] // 86400 + 4) % 7),  # 1970-01-01是周四
+                    0  # 默认值
+                ).astype('int8')
+                
+                # 商务时间（早高峰 6-9点，晚高峰 17-20点）
+                hour_col = f'{col}_hour'
+                df[f'{col}_business_time'] = (
+                    ((df[hour_col] >= 6) & (df[hour_col] <= 9)) |
+                    ((df[hour_col] >= 17) & (df[hour_col] <= 20))
+                ).astype('int8')
+                
+                # 红眼航班特征
+                df[f'{col}_is_redeye'] = (
+                    (df[hour_col] >= 22) | (df[hour_col] <= 6)
+                ).astype('int8')
         
         # 提前预订天数
-        for leg in [0, 1]:
-            dep_col = f'legs{leg}_departureAt'
-            if dep_col in df.columns and 'requestDate' in df.columns:
-                days_ahead = (df[dep_col] - df['requestDate']) // 86400
-                df[f'legs{leg}_days_ahead'] = np.clip(days_ahead, 0, 365).astype('int16')
-                
-                # 分类：当天、近期、远期
-                df[f'legs{leg}_booking_type'] = pd.cut(
-                    df[f'legs{leg}_days_ahead'], 
-                    bins=[-1, 0, 7, 30, float('inf')], 
-                    labels=[0, 1, 2, 3]
-                ).astype('int8')
+        if 'requestDate' in df.columns:
+            for leg in [0, 1]:
+                dep_col = f'legs{leg}_departureAt'
+                if dep_col in df.columns:
+                    # 计算提前预订天数
+                    valid_mask = (df[dep_col] != -1) & (df['requestDate'] != -1)
+                    df[f'legs{leg}_days_ahead'] = np.where(
+                        valid_mask,
+                        np.clip((df[dep_col] - df['requestDate']) // 86400, 0, 365),
+                        7  # 默认一周
+                    ).astype('int16')
+                    
+                    # 预订类型分类
+                    days_ahead = df[f'legs{leg}_days_ahead']
+                    df[f'legs{leg}_booking_type'] = np.select(
+                        [days_ahead <= 0, days_ahead <= 7, days_ahead <= 30],
+                        [0, 1, 2],
+                        default=3
+                    ).astype('int8')
+        
+        return df
+    
+    @timer
+    def create_ranker_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建基于ranker_id的特征"""
+        df = df.copy()
+        
+        if 'ranker_id' not in df.columns:
+            return df
+        
+        # 组大小特征
+        df['group_size'] = df.groupby('ranker_id')['Id'].transform('count').astype('int16')
+        df['group_size_log'] = np.log1p(df['group_size'])
+        
+        # 价格排名特征（基于价格分箱）
+        if 'totalPrice_bin' in df.columns:
+            df['price_rank'] = df.groupby('ranker_id')['totalPrice_bin'].rank().astype('int8')
+            df['price_pct_rank'] = df.groupby('ranker_id')['totalPrice_bin'].rank(pct=True)
+            df['is_cheapest'] = (df['price_rank'] == 1).astype('int8')
+            
+            # 价格偏离中位数
+            median_price = df.groupby('ranker_id')['totalPrice_bin'].transform('median')
+            std_price = df.groupby('ranker_id')['totalPrice_bin'].transform('std')
+            df['price_from_median'] = (df['totalPrice_bin'] - median_price) / (std_price + 1)
+        
+        # 持续时间排名
+        if 'total_duration' in df.columns:
+            df['duration_rank'] = df.groupby('ranker_id')['total_duration'].rank().astype('int8')
+        
+        # 最少段数
+        if 'total_segments' in df.columns:
+            df['is_min_segments'] = (
+                df['total_segments'] == df.groupby('ranker_id')['total_segments'].transform('min')
+            ).astype('int8')
+        
+        # 直飞最便宜
+        if 'is_direct_leg0' in df.columns and 'totalPrice_bin' in df.columns:
+            # 计算每个ranker_id中直飞航班的最低价格
+            direct_cheapest = (
+                df[df['is_direct_leg0'] == 1]
+                .groupby('ranker_id')['totalPrice_bin']
+                .min()
+                .reset_index()
+                .rename(columns={'totalPrice_bin': 'min_direct_price'})
+            )
+            
+            df = df.merge(direct_cheapest, on='ranker_id', how='left')
+            df['is_direct_cheapest'] = (
+                (df['is_direct_leg0'] == 1) & 
+                (df['totalPrice_bin'] == df['min_direct_price'])
+            ).astype('int8').fillna(0)
+            df.drop('min_direct_price', axis=1, inplace=True)
+        
+        return df
+    
+    @timer
+    def create_carrier_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建航空公司相关特征"""
+        df = df.copy()
+        
+        # 主要航空公司特征（基于哈希值，需要预先知道SU和S7的哈希值）
+        carrier_col = 'legs0_segments0_marketingCarrier_code'
+        if carrier_col in df.columns:
+            # 由于已经哈希编码，无法直接判断，使用频次作为代理
+            carrier_counts = df[carrier_col].value_counts()
+            top_carriers = carrier_counts.head(5).index.tolist()  # 前5大航空公司
+            df['is_major_carrier'] = df[carrier_col].isin(top_carriers).astype('int8')
+        
+        # 航空公司一致性（往返程是否同一航空公司）
+        outbound_carrier = 'legs0_segments0_marketingCarrier_code'
+        return_carrier = 'legs1_segments0_marketingCarrier_code'
+        
+        if outbound_carrier in df.columns and return_carrier in df.columns:
+            df['same_carrier_roundtrip'] = (
+                (df[outbound_carrier] == df[return_carrier]) & 
+                (df[outbound_carrier] != -1) & 
+                (df[return_carrier] != -1)
+            ).astype('int8')
         
         return df
     
@@ -127,154 +281,95 @@ class FeatureEngineering:
         """创建乘客相关特征"""
         df = df.copy()
         
+        # VIP和常旅客组合特征
+        vip_col = 'is_vip' if 'is_vip' in df.columns else 'isVip'
+        ff_col = 'has_frequent_flyer'
+        
+        if vip_col in df.columns and ff_col in df.columns:
+            df['is_vip_or_freq'] = (
+                (df[vip_col] == 1) | (df[ff_col] == 1)
+            ).astype('int8')
+        
+        # 企业用户特征
+        if 'has_corporate_tariff' in df.columns and vip_col in df.columns:
+            df['vip_corporate'] = (
+                (df[vip_col] == 1) & (df['has_corporate_tariff'] == 1)
+            ).astype('int8')
+        
         # 乘客数量特征
         if 'pricingInfo_passengerCount' in df.columns:
             df['is_single_passenger'] = (df['pricingInfo_passengerCount'] == 1).astype('int8')
             df['is_group_travel'] = (df['pricingInfo_passengerCount'] >= 3).astype('int8')
         
-        # VIP特征交互
-        if 'isVip' in df.columns and 'corporateTariffCode' in df.columns:
-            df['vip_corporate'] = (df['isVip'] & (df['corporateTariffCode'] != -1)).astype('int8')
-        
         return df
     
     @timer
     def create_interaction_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """创建交互特征"""
+        """创建交互特征（选择性创建，避免特征爆炸）"""
         df = df.copy()
         
-        # 价格-时间交互
-        price_cols = [col for col in df.columns if 'price' in col.lower() and '_bin' in col]
-        time_cols = [col for col in df.columns if 'hour' in col]
+        # 价格-时间交互（只选择最重要的）
+        if 'totalPrice_bin' in df.columns and 'legs0_departureAt_hour' in df.columns:
+            df['price_hour_interaction'] = (
+                df['totalPrice_bin'] * df['legs0_departureAt_hour']
+            ).astype('int16')
         
-        for price_col in price_cols[:2]:  # 限制特征数量
-            for time_col in time_cols[:2]:
-                if price_col in df.columns and time_col in df.columns:
-                    interaction_name = f'{price_col}_x_{time_col}'
-                    df[interaction_name] = (df[price_col] * df[time_col]).astype('int16')
+        # 直飞-价格交互
+        if 'is_direct_leg0' in df.columns and 'totalPrice_bin' in df.columns:
+            df['direct_price_interaction'] = (
+                df['is_direct_leg0'] * df['totalPrice_bin']
+            ).astype('int16')
         
-        return df
-
-class DataQuality:
-    """数据质量管理类"""
-    
-    def __init__(self, logger=None):
-        self.logger = logger
-    
-    @timer
-    def detect_outliers(self, df: pd.DataFrame, method: str = 'iqr') -> pd.DataFrame:
-        """检测异常值"""
-        outlier_info = {}
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        
-        for col in numeric_cols:
-            if col in ['Id', 'ranker_id', 'profileId', 'companyID']:
-                continue
-                
-            if method == 'iqr':
-                Q1 = df[col].quantile(0.25)
-                Q3 = df[col].quantile(0.75)
-                IQR = Q3 - Q1
-                lower_bound = Q1 - 1.5 * IQR
-                upper_bound = Q3 + 1.5 * IQR
-                
-                outliers = (df[col] < lower_bound) | (df[col] > upper_bound)
-                outlier_info[col] = {
-                    'count': outliers.sum(),
-                    'percentage': outliers.mean() * 100,
-                    'bounds': (lower_bound, upper_bound)
-                }
-        
-        if self.logger:
-            total_outliers = sum(info['count'] for info in outlier_info.values())
-            self.logger.info(f"检测到 {total_outliers} 个异常值")
-        
-        return outlier_info
-    
-    @timer
-    def handle_missing_values(self, df: pd.DataFrame, strategy: Dict[str, str] = None) -> pd.DataFrame:
-        """处理缺失值"""
-        df = df.copy()
-        
-        default_strategy = {
-            'numeric': 'median',
-            'categorical': 'mode',
-            'boolean': 'mode'
-        }
-        
-        strategy = strategy or default_strategy
-        
-        for col in df.columns:
-            if df[col].isnull().any():
-                dtype = df[col].dtype
-                
-                if pd.api.types.is_numeric_dtype(dtype):
-                    if strategy.get('numeric') == 'median':
-                        df[col].fillna(df[col].median(), inplace=True)
-                    elif strategy.get('numeric') == 'mean':
-                        df[col].fillna(df[col].mean(), inplace=True)
-                    else:
-                        df[col].fillna(-1, inplace=True)
-                
-                elif pd.api.types.is_bool_dtype(dtype):
-                    df[col].fillna(df[col].mode().iloc[0] if not df[col].mode().empty else False, inplace=True)
-                
-                else:
-                    df[col].fillna('unknown', inplace=True)
+        # VIP-舱位交互
+        if 'is_vip' in df.columns and 'avg_cabin_class' in df.columns:
+            df['vip_cabin_interaction'] = (
+                df['is_vip'] * df['avg_cabin_class'].fillna(0)
+            ).astype('int16')
         
         return df
-
-class DataEngineering:
-    """数据工程主类，整合所有数据处理功能"""
-    
-    def __init__(self, logger=None):
-        self.logger = logger
-        self.feature_eng = FeatureEngineering(logger)
-        self.data_quality = DataQuality(logger)
-        self.processing_stats = {}
     
     @timer
-    @memory_monitor
     def process_features(self, df: pd.DataFrame, 
                         feature_types: List[str] = None) -> pd.DataFrame:
         """
-        处理特征工程
+        主特征工程入口
         
         Args:
-            df: 输入数据
-            feature_types: 要创建的特征类型列表
-            
-        Returns:
-            处理后的数据
+            df: 输入数据（已编码）
+            feature_types: 要创建的特征类型
         """
         if feature_types is None:
-            feature_types = ['flight', 'price', 'route', 'temporal', 'passenger']
+            feature_types = ['core', 'route', 'time', 'ranker', 'carrier', 'passenger']
         
         df_processed = df.copy()
         original_shape = df_processed.shape
         
-        # 记录处理前状态
         self.processing_stats['original_shape'] = original_shape
-        self.processing_stats['original_memory'] = df_processed.memory_usage(deep=True).sum() / 1024**2
+        
+        if self.logger:
+            self.logger.info(f"开始特征工程: {original_shape}")
         
         # 按类型创建特征
-        if 'flight' in feature_types:
-            df_processed = self.feature_eng.create_flight_features(df_processed)
-        
-        if 'price' in feature_types:
-            df_processed = self.feature_eng.create_price_features(df_processed)
+        if 'core' in feature_types:
+            df_processed = self.create_core_features(df_processed)
         
         if 'route' in feature_types:
-            df_processed = self.feature_eng.create_route_features(df_processed)
+            df_processed = self.create_route_features(df_processed)
         
-        if 'temporal' in feature_types:
-            df_processed = self.feature_eng.create_temporal_features(df_processed)
+        if 'time' in feature_types:
+            df_processed = self.create_time_features(df_processed)
+        
+        if 'ranker' in feature_types:
+            df_processed = self.create_ranker_features(df_processed)
+        
+        if 'carrier' in feature_types:
+            df_processed = self.create_carrier_features(df_processed)
         
         if 'passenger' in feature_types:
-            df_processed = self.feature_eng.create_passenger_features(df_processed)
+            df_processed = self.create_passenger_features(df_processed)
         
         if 'interaction' in feature_types:
-            df_processed = self.feature_eng.create_interaction_features(df_processed)
+            df_processed = self.create_interaction_features(df_processed)
         
         # 内存优化
         df_processed = MemoryUtils.optimize_dataframe_memory(df_processed)
@@ -282,60 +377,60 @@ class DataEngineering:
         # 记录处理后状态
         final_shape = df_processed.shape
         self.processing_stats['final_shape'] = final_shape
-        self.processing_stats['final_memory'] = df_processed.memory_usage(deep=True).sum() / 1024**2
         self.processing_stats['features_added'] = final_shape[1] - original_shape[1]
         
         if self.logger:
             self.logger.info(f"特征工程完成: {original_shape} -> {final_shape}")
             self.logger.info(f"新增特征: {self.processing_stats['features_added']}")
-            memory_saved = self.processing_stats['original_memory'] - self.processing_stats['final_memory']
-            if memory_saved > 0:
-                self.logger.info(f"内存优化节省: {memory_saved:.1f}MB")
         
-        # 清理内存
         del df
         gc.collect()
         
         return df_processed
     
     @timer
-    def validate_and_clean(self, df: pd.DataFrame, 
-                          clean_outliers: bool = False,
-                          outlier_method: str = 'iqr') -> Tuple[pd.DataFrame, Dict]:
-        """
-        验证和清理数据
-        
-        Args:
-            df: 输入数据
-            clean_outliers: 是否清理异常值
-            outlier_method: 异常值检测方法
-            
-        Returns:
-            (清理后的数据, 质量报告)
-        """
+    def validate_and_clean(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
+        """数据验证和清理"""
         df_clean = df.copy()
         
-        # 检测异常值
-        outlier_info = self.data_quality.detect_outliers(df_clean, method=outlier_method)
+        # 检查缺失值
+        missing_info = df_clean.isnull().sum()
+        missing_cols = missing_info[missing_info > 0].to_dict()
         
-        # 处理异常值（如果需要）
-        if clean_outliers:
-            for col, info in outlier_info.items():
-                if info['percentage'] > 5:  # 如果异常值超过5%，只做截尾处理
-                    lower_bound, upper_bound = info['bounds']
-                    df_clean[col] = df_clean[col].clip(lower_bound, upper_bound)
+        # 检查异常值（基于数值列）
+        outlier_info = {}
+        numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
         
-        # 处理缺失值
-        df_clean = self.data_quality.handle_missing_values(df_clean)
+        for col in numeric_cols:
+            if col in ['Id', 'ranker_id', 'profileId', 'companyID']:
+                continue
+            
+            Q1 = df_clean[col].quantile(0.25)
+            Q3 = df_clean[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            outliers = (df_clean[col] < lower_bound) | (df_clean[col] > upper_bound)
+            if outliers.sum() > 0:
+                outlier_info[col] = {
+                    'count': outliers.sum(),
+                    'percentage': outliers.mean() * 100
+                }
         
         # 生成质量报告
         quality_report = {
+            'missing_values': missing_cols,
             'outliers': outlier_info,
-            'missing_values_before': df.isnull().sum().to_dict(),
-            'missing_values_after': df_clean.isnull().sum().to_dict(),
-            'shape_before': df.shape,
-            'shape_after': df_clean.shape
+            'shape': df_clean.shape
         }
+        
+        if self.logger:
+            if missing_cols:
+                self.logger.warning(f"发现缺失值: {len(missing_cols)} 列")
+            if outlier_info:
+                total_outliers = sum(info['count'] for info in outlier_info.values())
+                self.logger.warning(f"发现异常值: {total_outliers} 个")
         
         return df_clean, quality_report
     
@@ -344,32 +439,78 @@ class DataEngineering:
         return self.processing_stats
     
     @timer
-    def create_feature_importance_map(self, df: pd.DataFrame) -> Dict[str, int]:
-        """创建特征重要性映射（基于非缺失值比例和方差）"""
-        feature_importance = {}
+    def process_segment_file(self, input_file: str, output_file: str, 
+                           feature_types: List[str] = None) -> bool:
+        """处理单个segment文件"""
+        try:
+            if not os.path.exists(input_file):
+                if self.logger:
+                    self.logger.warning(f"输入文件不存在: {input_file}")
+                return False
+            
+            # 检查文件是否为空
+            pf = pq.ParquetFile(input_file)
+            if pf.metadata.num_rows == 0:
+                if self.logger:
+                    self.logger.info(f"空文件，跳过: {input_file}")
+                # 创建空的输出文件
+                empty_df = pd.DataFrame()
+                empty_df.to_parquet(output_file, index=False)
+                return True
+            
+            # 读取数据
+            df = pd.read_parquet(input_file)
+            
+            if len(df) == 0:
+                if self.logger:
+                    self.logger.info(f"空数据，跳过: {input_file}")
+                df.to_parquet(output_file, index=False)
+                return True
+            
+            # 特征工程
+            df_featured = self.process_features(df, feature_types)
+            
+            # 数据验证
+            df_clean, quality_report = self.validate_and_clean(df_featured)
+            
+            # 保存结果
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            df_clean.to_parquet(output_file, index=False)
+            
+            if self.logger:
+                self.logger.info(f"处理完成: {input_file} -> {output_file}")
+                self.logger.info(f"  形状: {df.shape} -> {df_clean.shape}")
+            
+            return True
+            
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"处理文件失败 {input_file}: {str(e)}")
+            return False
+    
+    @timer
+    def process_all_segments(self, input_dir: str, output_dir: str, 
+                           data_type: str, feature_types: List[str] = None) -> bool:
+        """处理所有segment文件"""
+        input_dir = Path(input_dir)
+        output_dir = Path(output_dir)
         
-        for col in df.select_dtypes(include=[np.number]).columns:
-            if col in ['Id', 'ranker_id', 'profileId', 'companyID']:
-                continue
-            
-            # 计算非缺失值比例
-            non_missing_ratio = df[col].notna().mean()
-            
-            # 计算标准化方差
-            if df[col].var() > 0:
-                normalized_var = df[col].var() / (df[col].mean() + 1e-8)
-            else:
-                normalized_var = 0
-            
-            # 综合分数
-            importance_score = non_missing_ratio * normalized_var
-            feature_importance[col] = importance_score
+        # 确保输出目录存在
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        # 排序
-        sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+        success_count = 0
+        total_count = 0
+        
+        for segment_level in [0, 1, 2, 3]:
+            input_file = input_dir / f"{data_type}_segment_{segment_level}.parquet"
+            output_file = output_dir / f"{data_type}_segment_{segment_level}.parquet"
+            
+            total_count += 1
+            
+            if self.process_segment_file(str(input_file), str(output_file), feature_types):
+                success_count += 1
         
         if self.logger:
-            self.logger.info(f"计算了 {len(sorted_features)} 个特征的重要性")
-            self.logger.info(f"Top 5 特征: {[f[0] for f in sorted_features[:5]]}")
+            self.logger.info(f"批处理完成: {success_count}/{total_count} 个文件成功")
         
-        return dict(sorted_features)
+        return success_count == total_count
