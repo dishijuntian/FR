@@ -1,8 +1,5 @@
-# 航班排名系统配置文件: Flight Ranking System Configuration
-
-# 智能并行策略说明:
-# - GPU可用时: 使用单进程+GPU加速，避免GPU竞争
-# - GPU不可用时: 使用CPU多进程加速运算
+# 优化版航班排名系统配置文件
+# 特点: 自动数据集划分 + 快速训练策略
 
 # 路径配置
 paths:
@@ -11,7 +8,6 @@ paths:
   model_save_dir: "data/aeroclub-recsys-2025/models"
   output_dir: "data/aeroclub-recsys-2025/submissions"
   log_dir: "logs"
-
 
 # 数据处理配置
 data_processing:
@@ -22,31 +18,75 @@ data_processing:
   force_feature: false
   verify_results: true
   force_reprocess: false
-  
-# 训练配置
+
+# 优化训练配置
 training:
   segments: [0, 1, 2]
   model_names: ['XGBRanker', 'LGBMRanker', 'RankNet']
   use_gpu: true
-  n_folds: 5
   random_state: 42
   
-  # 模型参数配置
+  # 自动数据集划分策略
+  auto_split_strategy:
+    # ranker_id数量 -> 验证集折数映射
+    thresholds:
+      1000: 2     # ≤1000个ranker: 2折 (50% train, 50% val)
+      2000: 3     # ≤2000个ranker: 3折 (67% train, 33% val)  
+      5000: 5     # ≤5000个ranker: 5折 (80% train, 20% val)
+      10000: 8    # ≤10000个ranker: 8折 (87.5% train, 12.5% val)
+      99999999: 10 # >10000个ranker: 10折 (90% train, 10% val)
+    
+    # 验证集大小调整策略
+    validation_size_strategy:
+      small_data_threshold: 100      # 小数据集阈值
+      small_data_val_size: 0.3       # 小数据集验证集占比
+      large_data_threshold: 10000    # 大数据集阈值  
+      large_data_val_size: 0.1       # 大数据集验证集占比
+      default_val_size: 0.2          # 默认验证集占比
+  
+  # 快速训练策略
+  fast_training:
+    # 是否启用快速训练模式
+    enabled: true
+    
+    # 训练轮次调整
+    epochs:
+      validation: 50    # 验证阶段训练轮次
+      final: 100        # 最终模型训练轮次
+    
+    # 早停策略
+    early_stopping:
+      enabled: true
+      patience: 10      # 验证无改善的容忍轮次
+      min_delta: 0.001  # 最小改善阈值
+    
+    # 内存优化
+    memory_optimization:
+      clear_cache: true          # 训练后清理缓存
+      optimize_dtypes: true      # 自动优化数据类型
+      batch_processing: false    # 是否使用批处理(大数据集)
+      
+  # 模型参数配置 
   model_configs:
     XGBRanker:
       n_estimators: 200
       max_depth: 8
       learning_rate: 0.05
-    
+      subsample: 0.8
+      colsample_bytree: 0.8
+      
     LGBMRanker:
       n_estimators: 200
       max_depth: 8
       learning_rate: 0.05
-    
+      subsample: 0.8
+      colsample_bytree: 0.8
+      
     RankNet:
       hidden_dims: [128, 64, 32]
       learning_rate: 0.001
       dropout_rate: 0.2
+      batch_size: 1024
 
 # 预测配置
 prediction:
@@ -55,21 +95,64 @@ prediction:
   use_gpu: true
   enable_business_rules: false
   
-  # 集成权重配置
+  # 集成权重配置 (根据验证性能自动调整)
   ensemble_weights:
     XGBRanker: 0.4
-    LGBMRanker: 0.4
+    LGBMRanker: 0.4  
     RankNet: 0.2
+    
+  # 预测优化
+  prediction_optimization:
+    batch_size: 10000        # 预测批大小
+    memory_efficient: true   # 内存高效模式
+    cache_predictions: false # 是否缓存中间预测结果
+
+# 性能监控配置
+monitoring:
+  # 是否启用性能监控
+  enabled: true
+  
+  # 监控指标
+  metrics:
+    - training_time
+    - memory_usage
+    - validation_score
+    - model_size
+    
+  # 性能阈值告警
+  thresholds:
+    max_training_time: 1800    # 最大训练时间(秒)
+    max_memory_usage: 8192     # 最大内存使用(MB)
+    min_validation_score: 0.5  # 最小验证分数
 
 # 流水线配置
 pipeline:
   run_data_processing: true
   run_training: true
   run_prediction: true
-
+  
+  # 并行策略
+  parallel_strategy:
+    # GPU可用时使用单进程+GPU, CPU时使用多进程
+    auto_parallel: true
+    max_workers: null  # null=自动检测
 
 # 日志配置
 logging:
   level: "INFO"
   format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
   datefmt: "%Y-%m-%d %H:%M:%S"
+  
+  # 详细日志选项
+  detailed_logging:
+    model_training: true     # 详细记录模型训练过程
+    data_processing: false   # 数据处理详细日志
+    memory_monitoring: true  # 内存监控日志
+    performance_metrics: true # 性能指标日志
+
+# 实验追踪配置
+experiment_tracking:
+  enabled: false
+  # 如果启用，可以集成MLflow等工具
+  backend: "mlflow"  
+  experiment_name: "flight_ranking_optimized"
