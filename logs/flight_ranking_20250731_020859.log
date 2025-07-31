@@ -1,0 +1,215 @@
+2025-07-31 02:08:59,144 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-31 02:08:59,144 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-31 02:08:59,186 |     INFO | core.Core | GPU加速可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:08:59,187 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-31 02:08:59,187 |     INFO | core.Core | GPU模式: 使用单进程训练避免GPU竞争
+2025-07-31 02:08:59,187 |     INFO | core.Core | 训练器初始化完成
+2025-07-31 02:08:59,187 |     INFO | core.Core | 训练模式: GPU加速 + 串行fold训练
+2025-07-31 02:08:59,187 |     INFO | core.Core | GPU推理可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:08:59,188 |     INFO | core.Core | GPU推理设置已优化
+2025-07-31 02:08:59,188 |     INFO | core.Core | 推理批次大小: 3072
+2025-07-31 02:08:59,188 |     INFO | core.Core | 预测器初始化完成
+2025-07-31 02:08:59,188 |     INFO | core.Core | 核心控制器初始化完成
+2025-07-31 02:08:59,188 |     INFO | core.Core | 开始完整流水线执行
+2025-07-31 02:08:59,188 |     INFO | core.Core | 开始数据处理
+2025-07-31 02:08:59,188 |     INFO | core.Core | 开始数据处理流水线
+2025-07-31 02:08:59,189 |     INFO | core.Core | 开始处理 TRAIN 数据
+2025-07-31 02:08:59,189 |     INFO | core.Core | 编码文件已存在，跳过: data\aeroclub-recsys-2025\encoded\train\train_encoded.parquet
+2025-07-31 02:08:59,189 |     INFO | core.Core | encode_data 耗时: 0.00s
+2025-07-31 02:08:59,189 |     INFO | core.Core | 分割文件已存在，跳过
+2025-07-31 02:08:59,189 |     INFO | core.Core | 开始验证 train 数据集的分割结果...
+2025-07-31 02:09:05,051 |     INFO | core.Core | 验证结果:
+2025-07-31 02:09:05,052 |     INFO | core.Core |   原始数据: 18,145,372 行, 105,539 ranker_id
+2025-07-31 02:09:05,053 |     INFO | core.Core |   分割数据: 18,075,751 行, 90,728 ranker_id
+2025-07-31 02:09:05,053 |     INFO | core.Core |   行数匹配: False, ranker_id匹配: False
+2025-07-31 02:09:05,054 |  WARNING | core.Core | 行数差异: 69621 行
+2025-07-31 02:09:05,054 |  WARNING | core.Core | ranker_id差异: 14811 个
+2025-07-31 02:09:05,439 |  WARNING | core.Core | 略过 Train 数据集完整性验证
+2025-07-31 02:09:05,440 |     INFO | core.Core | segment_data 耗时: 6.25s
+2025-07-31 02:09:05,440 |     INFO | core.Core | 开始 train 特征工程
+2025-07-31 02:09:06,026 |     INFO | core.Core | 开始特征工程: (6089760, 52)
+2025-07-31 02:09:07,454 |     INFO | core.Core | create_core_features 耗时: 1.43s
+2025-07-31 02:09:09,031 |     INFO | core.Core | create_route_features 耗时: 1.54s
+2025-07-31 02:09:10,005 |     INFO | core.Core | create_time_features 耗时: 0.90s
+2025-07-31 02:09:17,515 |     INFO | core.Core | create_ranker_features 耗时: 7.42s
+2025-07-31 02:09:18,013 |     INFO | core.Core | create_carrier_features 耗时: 0.44s
+2025-07-31 02:09:18,517 |     INFO | core.Core | create_passenger_features 耗时: 0.44s
+2025-07-31 02:09:21,482 |     INFO | core.Core | 特征工程完成: (6089760, 52) -> (6089760, 103)
+2025-07-31 02:09:21,483 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:09:21,578 |     INFO | core.Core | process_features 耗时: 15.75s
+2025-07-31 02:09:28,529 |  WARNING | core.Core | 发现异常值: 27802413 个
+2025-07-31 02:09:28,530 |     INFO | core.Core | validate_and_clean 耗时: 6.95s
+2025-07-31 02:09:40,552 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\train\train_segment_0.parquet -> data\aeroclub-recsys-2025\processed\train\train_segment_0.parquet
+2025-07-31 02:09:40,553 |     INFO | core.Core |   形状: (6089760, 52) -> (6089760, 103)
+2025-07-31 02:09:40,667 |     INFO | core.Core | process_segment_file 耗时: 35.22s
+2025-07-31 02:09:42,282 |     INFO | core.Core | 开始特征工程: (10865187, 76)
+2025-07-31 02:09:44,817 |     INFO | core.Core | create_core_features 耗时: 2.53s
+2025-07-31 02:09:49,124 |     INFO | core.Core | create_route_features 耗时: 4.21s
+2025-07-31 02:09:51,016 |     INFO | core.Core | create_time_features 耗时: 1.74s
+2025-07-31 02:10:05,016 |     INFO | core.Core | create_ranker_features 耗时: 13.79s
+2025-07-31 02:10:06,827 |     INFO | core.Core | create_carrier_features 耗时: 1.70s
+2025-07-31 02:10:08,327 |     INFO | core.Core | create_passenger_features 耗时: 1.38s
+2025-07-31 02:10:15,130 |     INFO | core.Core | 特征工程完成: (10865187, 76) -> (10865187, 127)
+2025-07-31 02:10:15,131 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:10:15,173 |     INFO | core.Core | process_features 耗时: 33.37s
+2025-07-31 02:10:36,354 |  WARNING | core.Core | 发现异常值: 88398599 个
+2025-07-31 02:10:36,355 |     INFO | core.Core | validate_and_clean 耗时: 21.18s
+2025-07-31 02:11:00,207 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\train\train_segment_1.parquet -> data\aeroclub-recsys-2025\processed\train\train_segment_1.parquet
+2025-07-31 02:11:00,208 |     INFO | core.Core |   形状: (10865187, 76) -> (10865187, 127)
+2025-07-31 02:11:00,471 |     INFO | core.Core | process_segment_file 耗时: 79.80s
+2025-07-31 02:11:00,773 |     INFO | core.Core | 开始特征工程: (1120257, 100)
+2025-07-31 02:11:01,059 |     INFO | core.Core | create_core_features 耗时: 0.28s
+2025-07-31 02:11:01,606 |     INFO | core.Core | create_route_features 耗时: 0.54s
+2025-07-31 02:11:01,876 |     INFO | core.Core | create_time_features 耗时: 0.25s
+2025-07-31 02:11:03,675 |     INFO | core.Core | create_ranker_features 耗时: 1.79s
+2025-07-31 02:11:03,889 |     INFO | core.Core | create_carrier_features 耗时: 0.19s
+2025-07-31 02:11:04,028 |     INFO | core.Core | create_passenger_features 耗时: 0.11s
+2025-07-31 02:11:04,849 |     INFO | core.Core | 特征工程完成: (1120257, 100) -> (1120257, 151)
+2025-07-31 02:11:04,850 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:11:04,911 |     INFO | core.Core | process_features 耗时: 4.20s
+2025-07-31 02:11:07,972 |  WARNING | core.Core | 发现异常值: 10167439 个
+2025-07-31 02:11:07,973 |     INFO | core.Core | validate_and_clean 耗时: 3.06s
+2025-07-31 02:11:11,540 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\train\train_segment_2.parquet -> data\aeroclub-recsys-2025\processed\train\train_segment_2.parquet
+2025-07-31 02:11:11,541 |     INFO | core.Core |   形状: (1120257, 100) -> (1120257, 151)
+2025-07-31 02:11:11,575 |     INFO | core.Core | process_segment_file 耗时: 11.10s
+2025-07-31 02:11:11,598 |     INFO | core.Core | 开始特征工程: (547, 122)
+2025-07-31 02:11:11,602 |     INFO | core.Core | create_core_features 耗时: 0.00s
+2025-07-31 02:11:11,604 |     INFO | core.Core | create_route_features 耗时: 0.00s
+2025-07-31 02:11:11,613 |     INFO | core.Core | create_time_features 耗时: 0.01s
+2025-07-31 02:11:11,619 |     INFO | core.Core | create_ranker_features 耗时: 0.01s
+2025-07-31 02:11:11,628 |     INFO | core.Core | create_carrier_features 耗时: 0.01s
+2025-07-31 02:11:11,629 |     INFO | core.Core | create_passenger_features 耗时: 0.00s
+2025-07-31 02:11:11,646 |     INFO | core.Core | 特征工程完成: (547, 122) -> (547, 170)
+2025-07-31 02:11:11,647 |     INFO | core.Core | 新增特征: 48
+2025-07-31 02:11:11,688 |     INFO | core.Core | process_features 耗时: 0.09s
+2025-07-31 02:11:11,771 |  WARNING | core.Core | 发现异常值: 4872 个
+2025-07-31 02:11:11,772 |     INFO | core.Core | validate_and_clean 耗时: 0.08s
+2025-07-31 02:11:11,797 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\train\train_segment_3.parquet -> data\aeroclub-recsys-2025\processed\train\train_segment_3.parquet
+2025-07-31 02:11:11,798 |     INFO | core.Core |   形状: (547, 122) -> (547, 170)
+2025-07-31 02:11:11,798 |     INFO | core.Core | process_segment_file 耗时: 0.22s
+2025-07-31 02:11:11,799 |     INFO | core.Core | 批处理完成: 4/4 个文件成功
+2025-07-31 02:11:11,799 |     INFO | core.Core | process_all_segments 耗时: 126.36s
+2025-07-31 02:11:11,799 |     INFO | core.Core | 特征工程完成，耗时: 0:02:06.356942
+2025-07-31 02:11:11,800 |     INFO | core.Core | 新增特征: 48
+2025-07-31 02:11:11,844 |     INFO | core.Core | engineer_features 耗时: 126.40s
+2025-07-31 02:11:11,845 |     INFO | core.Core | TRAIN 数据处理完成
+2025-07-31 02:11:11,845 |     INFO | core.Core | process_data_type 耗时: 132.66s
+2025-07-31 02:11:11,845 |     INFO | core.Core | 开始处理 TEST 数据
+2025-07-31 02:11:11,846 |     INFO | core.Core | 编码文件已存在，跳过: data\aeroclub-recsys-2025\encoded\test\test_encoded.parquet
+2025-07-31 02:11:11,847 |     INFO | core.Core | encode_data 耗时: 0.00s
+2025-07-31 02:11:11,847 |     INFO | core.Core | 分割文件已存在，跳过
+2025-07-31 02:11:11,847 |     INFO | core.Core | 开始验证 test 数据集的分割结果...
+2025-07-31 02:11:13,925 |     INFO | core.Core | 验证结果:
+2025-07-31 02:11:13,926 |     INFO | core.Core |   原始数据: 6,897,776 行, 45,231 ranker_id
+2025-07-31 02:11:13,926 |     INFO | core.Core |   分割数据: 6,897,776 行, 45,231 ranker_id
+2025-07-31 02:11:13,926 |     INFO | core.Core |   行数匹配: True, ranker_id匹配: True
+2025-07-31 02:11:13,972 |     INFO | core.Core | 现有分割文件验证通过
+2025-07-31 02:11:13,973 |     INFO | core.Core | segment_data 耗时: 2.13s
+2025-07-31 02:11:13,975 |     INFO | core.Core | 开始 test 特征工程
+2025-07-31 02:11:14,227 |     INFO | core.Core | 开始特征工程: (2427225, 52)
+2025-07-31 02:11:14,776 |     INFO | core.Core | create_core_features 耗时: 0.55s
+2025-07-31 02:11:15,329 |     INFO | core.Core | create_route_features 耗时: 0.54s
+2025-07-31 02:11:15,682 |     INFO | core.Core | create_time_features 耗时: 0.33s
+2025-07-31 02:11:19,630 |     INFO | core.Core | create_ranker_features 耗时: 3.93s
+2025-07-31 02:11:19,894 |     INFO | core.Core | create_carrier_features 耗时: 0.24s
+2025-07-31 02:11:20,155 |     INFO | core.Core | create_passenger_features 耗时: 0.23s
+2025-07-31 02:11:21,547 |     INFO | core.Core | 特征工程完成: (2427225, 52) -> (2427225, 103)
+2025-07-31 02:11:21,548 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:11:21,610 |     INFO | core.Core | process_features 耗时: 7.46s
+2025-07-31 02:11:24,762 |  WARNING | core.Core | 发现缺失值: 1 列
+2025-07-31 02:11:24,763 |  WARNING | core.Core | 发现异常值: 10344814 个
+2025-07-31 02:11:24,764 |     INFO | core.Core | validate_and_clean 耗时: 3.15s
+2025-07-31 02:11:27,586 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\test\test_segment_0.parquet -> data\aeroclub-recsys-2025\processed\test\test_segment_0.parquet
+2025-07-31 02:11:27,586 |     INFO | core.Core |   形状: (2427225, 52) -> (2427225, 103)
+2025-07-31 02:11:27,627 |     INFO | core.Core | process_segment_file 耗时: 13.65s
+2025-07-31 02:11:28,235 |     INFO | core.Core | 开始特征工程: (4111603, 76)
+2025-07-31 02:11:29,095 |     INFO | core.Core | create_core_features 耗时: 0.86s
+2025-07-31 02:11:30,769 |     INFO | core.Core | create_route_features 耗时: 1.64s
+2025-07-31 02:11:31,604 |     INFO | core.Core | create_time_features 耗时: 0.79s
+2025-07-31 02:11:39,329 |     INFO | core.Core | create_ranker_features 耗时: 7.67s
+2025-07-31 02:11:39,913 |     INFO | core.Core | create_carrier_features 耗时: 0.54s
+2025-07-31 02:11:40,518 |     INFO | core.Core | create_passenger_features 耗时: 0.56s
+2025-07-31 02:11:43,119 |     INFO | core.Core | 特征工程完成: (4111603, 76) -> (4111603, 127)
+2025-07-31 02:11:43,120 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:11:43,189 |     INFO | core.Core | process_features 耗时: 15.13s
+2025-07-31 02:11:51,861 |  WARNING | core.Core | 发现缺失值: 1 列
+2025-07-31 02:11:51,862 |  WARNING | core.Core | 发现异常值: 38075448 个
+2025-07-31 02:11:51,862 |     INFO | core.Core | validate_and_clean 耗时: 8.67s
+2025-07-31 02:12:02,370 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\test\test_segment_1.parquet -> data\aeroclub-recsys-2025\processed\test\test_segment_1.parquet
+2025-07-31 02:12:02,372 |     INFO | core.Core |   形状: (4111603, 76) -> (4111603, 127)
+2025-07-31 02:12:02,521 |     INFO | core.Core | process_segment_file 耗时: 34.89s
+2025-07-31 02:12:02,596 |     INFO | core.Core | 开始特征工程: (358948, 100)
+2025-07-31 02:12:02,677 |     INFO | core.Core | create_core_features 耗时: 0.08s
+2025-07-31 02:12:02,810 |     INFO | core.Core | create_route_features 耗时: 0.13s
+2025-07-31 02:12:02,883 |     INFO | core.Core | create_time_features 耗时: 0.07s
+2025-07-31 02:12:03,265 |     INFO | core.Core | create_ranker_features 耗时: 0.38s
+2025-07-31 02:12:03,318 |     INFO | core.Core | create_carrier_features 耗时: 0.04s
+2025-07-31 02:12:03,359 |     INFO | core.Core | create_passenger_features 耗时: 0.04s
+2025-07-31 02:12:03,578 |     INFO | core.Core | 特征工程完成: (358948, 100) -> (358948, 151)
+2025-07-31 02:12:03,579 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:12:03,635 |     INFO | core.Core | process_features 耗时: 1.06s
+2025-07-31 02:12:04,311 |  WARNING | core.Core | 发现异常值: 3389171 个
+2025-07-31 02:12:04,312 |     INFO | core.Core | validate_and_clean 耗时: 0.68s
+2025-07-31 02:12:05,047 |     INFO | core.Core | 处理完成: data\aeroclub-recsys-2025\segmented\test\test_segment_2.parquet -> data\aeroclub-recsys-2025\processed\test\test_segment_2.parquet
+2025-07-31 02:12:05,048 |     INFO | core.Core |   形状: (358948, 100) -> (358948, 151)
+2025-07-31 02:12:05,062 |     INFO | core.Core | process_segment_file 耗时: 2.54s
+2025-07-31 02:12:05,063 |     INFO | core.Core | 空文件，跳过: data\aeroclub-recsys-2025\segmented\test\test_segment_3.parquet
+2025-07-31 02:12:05,075 |     INFO | core.Core | process_segment_file 耗时: 0.01s
+2025-07-31 02:12:05,075 |     INFO | core.Core | 批处理完成: 4/4 个文件成功
+2025-07-31 02:12:05,076 |     INFO | core.Core | process_all_segments 耗时: 51.10s
+2025-07-31 02:12:05,077 |     INFO | core.Core | 特征工程完成，耗时: 0:00:51.101979
+2025-07-31 02:12:05,077 |     INFO | core.Core | 新增特征: 51
+2025-07-31 02:12:05,125 |     INFO | core.Core | engineer_features 耗时: 51.15s
+2025-07-31 02:12:05,125 |     INFO | core.Core | TEST 数据处理完成
+2025-07-31 02:12:05,126 |     INFO | core.Core | process_data_type 耗时: 53.28s
+2025-07-31 02:12:05,126 |     INFO | core.Core | ==================================================
+2025-07-31 02:12:05,126 |     INFO | core.Core | 数据处理流水线成功完成
+2025-07-31 02:12:05,127 |     INFO | core.Core | ==================================================
+2025-07-31 02:12:05,127 |     INFO | core.Core | TRAIN 数据统计:
+2025-07-31 02:12:05,132 |     INFO | core.Core |   编码文件: 18,145,372 行, 287.2MB
+2025-07-31 02:12:05,133 |     INFO | core.Core |   Segment 0: 6,089,760 行, 65.2MB
+2025-07-31 02:12:05,136 |     INFO | core.Core |   Segment 1: 10,865,187 行, 183.3MB
+2025-07-31 02:12:05,137 |     INFO | core.Core |   Segment 2: 1,120,257 行, 34.3MB
+2025-07-31 02:12:05,139 |     INFO | core.Core |   Segment 3: 547 行, 0.1MB
+2025-07-31 02:12:05,139 |     INFO | core.Core |   分割总计: 18,075,751 行, 282.9MB
+2025-07-31 02:12:05,142 |     INFO | core.Core |   Featured 0: 6,089,760 行, 91.1MB, 103 列
+2025-07-31 02:12:05,144 |     INFO | core.Core |   Featured 2: 1,120,257 行, 44.0MB, 151 列
+2025-07-31 02:12:05,147 |     INFO | core.Core |   Featured 3: 547 行, 0.1MB, 170 列
+2025-07-31 02:12:05,147 |     INFO | core.Core |   特征工程总计: 7,210,564 行, 135.3MB
+2025-07-31 02:12:05,148 |     INFO | core.Core | TEST 数据统计:
+2025-07-31 02:12:05,150 |     INFO | core.Core |   编码文件: 6,897,776 行, 105.5MB
+2025-07-31 02:12:05,152 |     INFO | core.Core |   Segment 0: 2,427,225 行, 22.4MB
+2025-07-31 02:12:05,153 |     INFO | core.Core |   Segment 1: 4,111,603 行, 72.1MB
+2025-07-31 02:12:05,155 |     INFO | core.Core |   Segment 2: 358,948 行, 11.1MB
+2025-07-31 02:12:05,156 |     INFO | core.Core |   分割总计: 6,897,776 行, 105.5MB
+2025-07-31 02:12:05,156 |     INFO | core.Core |   特征工程总计: 0 行, 0.0MB
+2025-07-31 02:12:05,157 |     INFO | core.Core | 总耗时: 0:03:05.937193
+2025-07-31 02:12:05,157 |     INFO | core.Core | process_pipeline 耗时: 185.97s
+2025-07-31 02:12:05,157 |     INFO | core.Core | ✓ 数据处理完成
+2025-07-31 02:12:05,157 |     INFO | core.Core | 开始模型训练
+2025-07-31 02:12:05,158 |     INFO | core.Core | ✓ 训练数据检查通过: [0, 1, 2]
+2025-07-31 02:12:05,158 |     INFO | core.Core | 开始训练所有段: [0, 1, 2]
+2025-07-31 02:12:05,158 |     INFO | core.Core | 使用模型: ['XGBRanker', 'LGBMRanker', 'RankNet']
+2025-07-31 02:12:05,158 |     INFO | core.Core | 
+==================================================
+2025-07-31 02:12:05,159 |     INFO | core.Core | 训练 segment_0
+2025-07-31 02:12:05,159 |     INFO | core.Core | ==================================================
+2025-07-31 02:12:05,159 |     INFO | core.Core | 开始CV训练 segment_0
+2025-07-31 02:12:05,686 |     INFO | core.Core | 加载 segment_0: (6089760, 103)
+2025-07-31 02:12:05,687 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:12:05,687 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-31 02:12:23,680 |     INFO | core.Core | 创建 8 个CV fold
+2025-07-31 02:12:23,682 |     INFO | core.Core | 训练 XGBRanker with CV
+2025-07-31 02:12:23,682 |     INFO | core.Core | GPU串行训练 8 个fold
+2025-07-31 02:12:24,304 |     INFO | core.Core | 训练 XGBRanker
+2025-07-31 02:12:24,305 |     INFO | core.Core | GPU设置已优化
+2025-07-31 02:12:24,305 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:12:24,306 |     INFO | core.Core | GPU内存: 8.6GB
+2025-07-31 02:12:24,306 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:12:24,779 |     INFO | src.model.Models | XGBoost GPU加速可用
+2025-07-31 02:12:24,780 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 02:12:24,780 |     INFO | src.model.Models | 使用GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:12:25,793 |     INFO | src.model.Models | LightGBM GPU加速可用
+2025-07-31 02:12:25,794 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 02:12:25,796 |  WARNING | core.Core | ✗ RankNet创建失败: RankNet.__init__() missing 1 required positional argument: 'input_dim'
+2025-07-31 02:12:25,796 |  WARNING | core.Core | ✗ Transformer创建失败: TransformerRanker.__init__() missing 1 required positional argument: 'input_dim'

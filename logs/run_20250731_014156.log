@@ -1,0 +1,54 @@
+================================================================
+航班排名系统运行日志
+启动时间: 2025-07-31 01:41:57
+项目路径: /d/kaggle/filght
+日志文件: /d/kaggle/filght/logs/run_20250731_014156.log
+================================================================
+[INFO] 2025-07-31 01:41:57 - 航班排名系统启动脚本
+[INFO] 2025-07-31 01:41:58 - 项目路径: /d/kaggle/filght
+[INFO] 2025-07-31 01:41:58 - 日志文件: /d/kaggle/filght/logs/run_20250731_014156.log
+[INFO] 2025-07-31 01:41:59 - 检查conda环境...
+[INFO] 2025-07-31 01:41:59 - 找到conda
+[INFO] 2025-07-31 01:42:03 - 激活conda环境: torch
+[INFO] 2025-07-31 01:42:13 - conda环境torch已激活
+[INFO] 2025-07-31 01:42:13 - 查找Python解释器...
+[INFO] 2025-07-31 01:42:15 - 使用 Python3: 3.11.5
+[INFO] 2025-07-31 01:42:16 - 查找主程序文件...
+[INFO] 2025-07-31 01:42:16 - 找到主程序: /d/kaggle/filght/src/main.py
+[INFO] 2025-07-31 01:42:17 - 检查必需文件...
+[INFO] 2025-07-31 01:42:17 - 找到配置文件: /d/kaggle/filght/config/conf.yaml
+[INFO] 2025-07-31 01:42:18 - 找到核心模块: /d/kaggle/filght/src/core/Core.py
+[INFO] 2025-07-31 01:42:18 - 检查Python包依赖...
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'xgboost'
+[WARN] 2025-07-31 01:42:24 - 缺少可选包: xgboost
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'lightgbm'
+[WARN] 2025-07-31 01:42:25 - 缺少可选包: lightgbm
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'torch'
+[WARN] 2025-07-31 01:42:26 - 缺少可选包: torch
+[WARN] 2025-07-31 01:42:28 - 缺少 3 个可选的Python包
+[WARN] 2025-07-31 01:42:29 - 建议安装以获得完整功能:
+[WARN] 2025-07-31 01:42:29 - pip install xgboost lightgbm torch
+[SUCCESS] 2025-07-31 01:42:30 - 必需的Python包检查完成
+[INFO] 2025-07-31 01:42:31 - 设置运行环境...
+[INFO] 2025-07-31 01:42:31 - PYTHONPATH: /d/kaggle/filght:D:\kaggle\filght;
+[INFO] 2025-07-31 01:42:32 - 工作目录: /d/kaggle/filght
+[INFO] 2025-07-31 01:42:33 - 启动航班排名系统主程序...
+[INFO] 2025-07-31 01:42:33 - 使用配置文件: config/conf.yaml
+Traceback (most recent call last):
+  File "D:\kaggle\filght\src\main.py", line 18, in <module>
+    from core.Core import FlightRankingCore
+  File "D:\kaggle\filght\src\core\Core.py", line 16, in <module>
+    from src.data.DataProcessor import DataProcessor
+  File "D:\kaggle\filght\src\data\DataProcessor.py", line 13, in <module>
+    from src.data.DataEncode import DataEncode
+  File "D:\kaggle\filght\src\data\DataEncode.py", line 3, in <module>
+    import pyarrow.parquet as pq
+ModuleNotFoundError: No module named 'pyarrow'
+[ERROR] 2025-07-31 01:42:35 - 主程序执行失败，退出码: 1
+[ERROR] 2025-07-31 01:42:36 - 程序执行失败，退出码: 1

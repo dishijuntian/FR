@@ -1,0 +1,16 @@
+2025-07-31 02:33:49,573 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-31 02:33:49,573 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-31 02:33:49,574 |     INFO | core.Core | 训练器初始化完成
+2025-07-31 02:33:49,574 |     INFO | core.Core | 训练模式: GPU加速 + 串行fold训练
+2025-07-31 02:33:49,575 |     INFO | core.Core | 预测器初始化完成
+2025-07-31 02:33:49,575 |     INFO | core.Core | 核心控制器初始化完成
+2025-07-31 02:33:49,576 |     INFO | core.Core | 开始完整流水线执行
+2025-07-31 02:33:49,576 |     INFO | core.Core | 开始数据处理
+2025-07-31 02:33:49,577 |     INFO | core.Core | 开始数据处理流水线
+2025-07-31 02:33:49,578 |     INFO | core.Core | 所有输出文件已存在
+2025-07-31 02:33:49,578 |     INFO | core.Core | process_pipeline 耗时: 0.00s
+2025-07-31 02:33:49,578 |     INFO | core.Core | ✓ 数据处理完成
+2025-07-31 02:33:49,579 |     INFO | core.Core | 开始模型训练
+2025-07-31 02:33:49,579 |     INFO | core.Core | ✓ 训练数据检查通过: [0, 1, 2]
+2025-07-31 02:33:49,579 |    ERROR | core.Core | 模型训练异常: FlightRankingTrainer.train_all_segments() got an unexpected keyword argument 'segments'
+2025-07-31 02:33:49,579 |    ERROR | core.Core | 模型训练失败

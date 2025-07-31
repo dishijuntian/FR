@@ -1,0 +1,135 @@
+2025-07-31 02:36:25,345 |     INFO | core.Core | 初始化DataSegment: 8 个进程, chunk_size=200000
+2025-07-31 02:36:25,345 |     INFO | core.Core | DataProcessor初始化: chunk_size=200000, n_processes=8
+2025-07-31 02:36:25,346 |     INFO | core.Core | 训练器初始化完成
+2025-07-31 02:36:25,346 |     INFO | core.Core | 训练模式: GPU加速 + 串行fold训练
+2025-07-31 02:36:25,346 |     INFO | core.Core | 预测器初始化完成
+2025-07-31 02:36:25,347 |     INFO | core.Core | 核心控制器初始化完成
+2025-07-31 02:36:25,348 |     INFO | core.Core | 开始完整流水线执行
+2025-07-31 02:36:25,349 |     INFO | core.Core | 开始数据处理
+2025-07-31 02:36:25,349 |     INFO | core.Core | 开始数据处理流水线
+2025-07-31 02:36:25,350 |     INFO | core.Core | 所有输出文件已存在
+2025-07-31 02:36:25,350 |     INFO | core.Core | process_pipeline 耗时: 0.00s
+2025-07-31 02:36:25,351 |     INFO | core.Core | ✓ 数据处理完成
+2025-07-31 02:36:25,351 |     INFO | core.Core | 开始模型训练
+2025-07-31 02:36:25,352 |     INFO | core.Core | ✓ 训练数据检查通过: [0, 1, 2]
+2025-07-31 02:36:25,352 |     INFO | core.Core | 开始训练所有段: [0, 1, 2]
+2025-07-31 02:36:25,352 |     INFO | core.Core | 使用模型: ['XGBRanker', 'LGBMRanker', 'RankNet']
+2025-07-31 02:36:25,352 |     INFO | core.Core | 
+==================================================
+2025-07-31 02:36:25,353 |     INFO | core.Core | 训练 segment_0
+2025-07-31 02:36:25,353 |     INFO | core.Core | ==================================================
+2025-07-31 02:36:25,353 |     INFO | core.Core | 开始训练 segment_0
+2025-07-31 02:36:25,861 |     INFO | core.Core | 加载 segment_0: (6089760, 103)
+2025-07-31 02:36:25,965 |     INFO | core.Core | GPU可用: NVIDIA GeForce RTX 4060 Laptop GPU
+2025-07-31 02:36:34,377 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 02:36:34,378 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 02:36:35,005 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 02:36:35,006 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 02:36:36,602 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 02:36:36,603 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 02:36:42,460 |     INFO | core.Core | 创建 5 个CV fold
+2025-07-31 02:36:42,461 |     INFO | core.Core | 训练 XGBRanker
+2025-07-31 02:36:43,551 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 02:36:43,552 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 02:36:43,708 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 02:36:43,709 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 02:36:43,712 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 02:36:43,712 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 02:50:06,832 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 02:50:07,533 |     INFO | core.Core | Fold 1/5, NDCG@10: 0.5541
+2025-07-31 02:50:08,461 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 02:50:08,461 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 02:50:08,601 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 02:50:08,602 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 02:50:08,687 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 02:50:08,688 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 03:03:09,073 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 03:03:09,756 |     INFO | core.Core | Fold 2/5, NDCG@10: 0.3120
+2025-07-31 03:03:10,797 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 03:03:10,798 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 03:03:10,941 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 03:03:10,942 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 03:03:10,945 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 03:03:10,945 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 03:16:22,542 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 03:16:23,250 |     INFO | core.Core | Fold 3/5, NDCG@10: 0.1331
+2025-07-31 03:16:24,204 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 03:16:24,204 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 03:16:24,343 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 03:16:24,344 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 03:16:24,347 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 03:16:24,348 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 03:29:57,495 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 03:29:58,182 |     INFO | core.Core | Fold 4/5, NDCG@10: 0.5900
+2025-07-31 03:29:59,126 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 03:29:59,126 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 03:29:59,270 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 03:29:59,271 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 03:29:59,274 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 03:29:59,274 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 03:43:31,258 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 03:43:31,953 |     INFO | core.Core | Fold 5/5, NDCG@10: 0.6086
+2025-07-31 03:43:32,215 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 03:43:32,215 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 03:43:32,359 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 03:43:32,360 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 03:43:32,362 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 03:43:32,362 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 04:04:23,640 |     INFO | core.Core | XGBoost训练完成
+2025-07-31 04:04:23,642 |     INFO | core.Core | ✓ XGBRanker 训练完成: CV=0.4396±0.1868 (时间: 5261.2s)
+2025-07-31 04:04:23,642 |     INFO | core.Core | 训练 LGBMRanker
+2025-07-31 04:04:24,754 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 04:04:24,755 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 04:04:24,892 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 04:04:24,893 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 04:04:24,896 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 04:04:24,897 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 04:17:52,065 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 04:17:53,074 |     INFO | core.Core | Fold 1/5, NDCG@10: 0.4671
+2025-07-31 04:17:54,350 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 04:17:54,351 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 04:17:54,505 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 04:17:54,506 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 04:17:54,509 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 04:17:54,509 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 04:31:20,176 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 04:31:21,085 |     INFO | core.Core | Fold 2/5, NDCG@10: 0.6372
+2025-07-31 04:31:22,080 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 04:31:22,081 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 04:31:22,210 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 04:31:22,210 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 04:31:22,213 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 04:31:22,214 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 04:44:54,947 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 04:44:55,903 |     INFO | core.Core | Fold 3/5, NDCG@10: 0.2974
+2025-07-31 04:44:57,053 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 04:44:57,054 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 04:44:57,206 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 04:44:57,207 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 04:44:57,470 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 04:44:57,470 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 04:57:45,818 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 04:57:46,763 |     INFO | core.Core | Fold 4/5, NDCG@10: 0.6311
+2025-07-31 04:57:47,690 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 04:57:47,691 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 04:57:47,818 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 04:57:47,819 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 04:57:47,822 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 04:57:47,822 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 05:10:30,740 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 05:10:31,758 |     INFO | core.Core | Fold 5/5, NDCG@10: 0.3675
+2025-07-31 05:10:32,037 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 05:10:32,038 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 05:10:32,161 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 05:10:32,162 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 05:10:32,165 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 05:10:32,166 |     INFO | core.Core | ✓ RankNet模型创建成功
+2025-07-31 05:30:23,566 |     INFO | core.Core | LightGBM训练完成
+2025-07-31 05:30:23,567 |     INFO | core.Core | ✓ LGBMRanker 训练完成: CV=0.4800±0.1369 (时间: 5159.9s)
+2025-07-31 05:30:23,568 |     INFO | core.Core | 训练 RankNet
+2025-07-31 05:30:24,637 |     INFO | core.Core | XGBoost GPU加速可用
+2025-07-31 05:30:24,637 |     INFO | core.Core | ✓ XGBoost模型创建成功
+2025-07-31 05:30:24,757 |     INFO | core.Core | LightGBM GPU加速可用
+2025-07-31 05:30:24,758 |     INFO | core.Core | ✓ LightGBM模型创建成功
+2025-07-31 05:30:24,760 |     INFO | core.Core | RankNet GPU加速可用
+2025-07-31 05:30:24,761 |     INFO | core.Core | ✓ RankNet模型创建成功
