@@ -22,7 +22,7 @@ data_processing:
 # 优化训练配置
 training:
   segments: [0, 1, 2]
-  model_names: ['XGBRanker', 'LGBMRanker', 'RankNet']
+  model_names: ['XGBRanker', 'LGBMRanker']
   use_gpu: true
   random_state: 42
   
@@ -51,13 +51,13 @@ training:
     
     # 训练轮次调整
     epochs:
-      validation: 50    # 验证阶段训练轮次
-      final: 100        # 最终模型训练轮次
+      validation: 5    # 验证阶段训练轮次
+      final: 10        # 最终模型训练轮次
     
     # 早停策略
     early_stopping:
       enabled: true
-      patience: 10      # 验证无改善的容忍轮次
+      patience: 3      # 验证无改善的容忍轮次
       min_delta: 0.001  # 最小改善阈值
     
     # 内存优化
@@ -72,26 +72,21 @@ training:
       n_estimators: 200
       max_depth: 8
       learning_rate: 0.05
-      subsample: 0.8
-      colsample_bytree: 0.8
       
     LGBMRanker:
       n_estimators: 200
       max_depth: 8
       learning_rate: 0.05
-      subsample: 0.8
-      colsample_bytree: 0.8
       
     RankNet:
       hidden_dims: [128, 64, 32]
       learning_rate: 0.001
       dropout_rate: 0.2
-      batch_size: 1024
 
 # 预测配置
 prediction:
   segments: [0, 1, 2]
-  model_names: ['XGBRanker', 'LGBMRanker', 'RankNet']
+  model_names: ['XGBRanker', 'LGBMRanker']
   use_gpu: true
   enable_business_rules: false
   
@@ -127,8 +122,8 @@ monitoring:
 
 # 流水线配置
 pipeline:
-  run_data_processing: true
-  run_training: true
+  run_data_processing: false
+  run_training: false
   run_prediction: true
   
   # 并行策略

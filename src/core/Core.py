@@ -157,9 +157,7 @@ class FlightRankingCore:
             self.logger.error(f"模型预测异常: {e}")
             return False
     
-    def run_full_pipeline(self, skip_data: bool = False, 
-                         skip_training: bool = False, 
-                         skip_prediction: bool = False) -> bool:
+    def run_full_pipeline(self) -> bool:
         """执行完整流水线"""
         self.logger.info("开始完整流水线执行")
         
@@ -168,7 +166,7 @@ class FlightRankingCore:
         
         try:
             # 数据处理
-            if not skip_data and pipeline_config.get('run_data_processing', True):
+            if pipeline_config.get('run_data_processing', True):
                 if not self.run_data_processing():
                     self.logger.error("数据处理失败")
                     return False
@@ -176,7 +174,7 @@ class FlightRankingCore:
                 self.logger.info("跳过数据处理")
             
             # 模型训练
-            if not skip_training and pipeline_config.get('run_training', True):
+            if pipeline_config.get('run_training', True):
                 if not self.run_model_training():
                     self.logger.error("模型训练失败")
                     return False
@@ -184,7 +182,7 @@ class FlightRankingCore:
                 self.logger.info("跳过模型训练")
             
             # 模型预测
-            if not skip_prediction and pipeline_config.get('run_prediction', True):
+            if pipeline_config.get('run_prediction', True):
                 if not self.run_model_prediction():
                     self.logger.error("模型预测失败")
                     return False

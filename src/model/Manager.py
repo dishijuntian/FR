@@ -66,7 +66,7 @@ class FlightRankingModelsManager:
         created_models = {}
         
         # 创建模型实例
-        for model_name in ['XGBRanker', 'LGBMRanker', 'RankNet']:
+        for model_name in ['XGBRanker', 'LGBMRanker']:
             try:
                 if model_name == 'XGBRanker':
                     created_models[model_name] = XGBoostRanker(

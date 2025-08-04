@@ -181,7 +181,7 @@ class FlightRankingPredictor:
         predictions = models_manager.predict_ensemble(X, available_models, weights)
         
         # 应用业务规则
-        predictions = self.apply_business_rules(predictions, processed_df)
+        # predictions = self.apply_business_rules(predictions, processed_df)
         
         # 生成排名
         rankings = self.generate_rankings(predictions, groups)
@@ -244,20 +244,26 @@ class FlightRankingPredictor:
     
     def _generate_prediction_report(self, results: pd.DataFrame, total_time: float):
         """生成预测报告"""
+        # 计算统计数据并转换为Python原生类型
+        total_samples = len(results)
+        ranker_count = int(results['ranker_id'].nunique())  # 转换为int
+        group_sizes = results.groupby('ranker_id').size()
+        
         report = {
             'prediction_summary': {
                 'segments': self.segments,
-                'total_samples': len(results),
-                'total_time': total_time,
-                'avg_time_per_sample': total_time / len(results) * 1000,  # ms
+                'total_samples': total_samples,  # 已经是Python int
+                'total_time': total_time,        # float类型可序列化
+                'avg_time_per_sample': total_time / total_samples * 1000,
                 'models_used': self.model_names,
-                'ensemble_weights': self.ensemble_weights
+                # 确保权重是原生Python类型
+                'ensemble_weights': [float(w) for w in self.ensemble_weights] 
             },
             'data_statistics': {
-                'total_rankers': results['ranker_id'].nunique(),
-                'avg_options_per_ranker': len(results) / results['ranker_id'].nunique(),
-                'min_options': results.groupby('ranker_id').size().min(),
-                'max_options': results.groupby('ranker_id').size().max()
+                'total_rankers': ranker_count,
+                'avg_options_per_ranker': total_samples / ranker_count,
+                'min_options': int(group_sizes.min()),  # 转换为int
+                'max_options': int(group_sizes.max())   # 转换为int
             }
         }
         
