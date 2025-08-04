@@ -1,127 +1,340 @@
-# 航班排名系统配置文件
-# Flight Ranking System Configuration
+# 航班排名系统配置文件 - PyTorch集成版
+# 支持传统模式和PyTorch分析器模式的切换
 
-# 路径配置
+# ===== 模式配置 =====
+mode:
+  prefer_pytorch: true           # 优先使用PyTorch模式（如果可用）
+  auto_fallback: true            # 自动回退到传统模式（如果PyTorch不可用）
+  allow_mode_switching: true     # 允许运行时切换模式
+
+# ===== 路径配置 =====
 paths:
-  # 数据目录（相对于项目根目录）
+  # 基础数据路径
   data_dir: "data/aeroclub-recsys-2025"
   
-  # 模型保存目录
+  # 传统模式路径
+  model_input_dir: "data/aeroclub-recsys-2025/processed"
   model_save_dir: "data/aeroclub-recsys-2025/models"
-  
-  # 输出目录
   output_dir: "data/aeroclub-recsys-2025/submissions"
-  
-  # 日志目录
   log_dir: "logs"
+  
+  # PyTorch分析器路径（当使用PyTorch模式时）
+  pytorch_analyzer_dir: "flight_ranking_analyzer pytorch"
+  pytorch_data_dir: "data/aeroclub-recsys-2025"  # PyTorch分析器的数据目录
+  pytorch_output_dir: "data/aeroclub-recsys-2025/results"  # PyTorch分析器的输出目录
 
-# 数据处理配置
+# ===== 数据处理配置 =====
 data_processing:
-  # 数据块大小（用于内存管理）
+  # 通用配置
   chunk_size: 200000
-  
-  # 并行进程数（null表示自动检测）
-  n_processes: null
-  
-  # 是否强制重新处理数据
+  n_processes: null  # null=自动检测CPU核数
   force_reprocess: false
-  
-  # 是否验证处理结果
   verify_results: true
+  
+  # 传统模式配置
+  force_encode: false
+  force_segment: false
+  force_feature: false
+  
+  # PyTorch模式配置（抽样参数）
+  use_sampling: true      # 是否使用数据抽样
+  num_groups: 2000        # 抽样组数
+  min_group_size: 20      # 每组最小数据条数
 
-# 模型训练配置
+# ===== 训练配置 =====
 training:
-  # 要训练的数据段
+  # 基本配置
   segments: [0, 1, 2]
-  
-  # 是否使用GPU加速
   use_gpu: true
-  
-  # 随机种子
   random_state: 42
+  save_models: true
   
-  # 模型参数
-  model_params:
-    xgboost:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
-      verbosity: 0
+  # 传统模式模型
+  traditional_model_names: ['XGBRanker', 'LGBMRanker']
+  
+  # PyTorch模式模型（包含传统+深度学习模型）
+  pytorch_model_names: ['XGBRanker', 'LGBMRanker', 'NeuralRanker', 'RankNet']
+  
+  # 动态模型选择（根据当前模式自动选择）
+  model_names: null  # null表示自动选择
+  
+  # 自动调参配置
+  enable_auto_tuning: false
+  auto_tuning_trials: 50
+  pytorch_auto_tuning_trials: 30  # PyTorch模型专用（较少以节省时间）
+  
+  # 传统模式训练参数
+  traditional_training:
+    # 自动数据集划分策略
+    auto_split_strategy:
+      thresholds:
+        1000: 2     # ≤1000个ranker: 2折
+        2000: 3     # ≤2000个ranker: 3折  
+        5000: 5     # ≤5000个ranker: 5折
+        10000: 8    # ≤10000个ranker: 8折
+        99999999: 10 # >10000个ranker: 10折
+      
+      validation_size_strategy:
+        small_data_threshold: 100      
+        small_data_val_size: 0.3       
+        large_data_threshold: 10000    
+        large_data_val_size: 0.1       
+        default_val_size: 0.2          
     
-    lightgbm:
+    # 快速训练策略
+    fast_training:
+      enabled: true
+      epochs:
+        validation: 50    
+        final: 100        
+      early_stopping:
+        enabled: true
+        patience: 10      
+        min_delta: 0.001  
+      memory_optimization:
+        clear_cache: true          
+        optimize_dtypes: true      
+        batch_processing: false    
+  
+  # PyTorch模式训练参数
+  pytorch_training:
+    # PyTorch环境配置
+    auto_detect_gpu: true
+    force_use_gpu: false
+    force_use_cpu: false
+    mixed_precision: false
+    
+    # 训练策略
+    default_epochs: 15
+    early_stopping_patience: 5
+    gradient_clipping: 1.0
+    lr_scheduler: 'cosine'
+    
+    # 内存优化
+    enable_memory_optimization: true
+    max_memory_mb: null
+    cache_size: 1000
+    enable_gpu_memory_monitor: true
+  
+  # 模型参数配置 
+  model_configs:
+    # 传统模型
+    XGBRanker:
       n_estimators: 200
       max_depth: 8
       learning_rate: 0.05
-      verbose: -1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      
+    LGBMRanker:
+      n_estimators: 200
+      max_depth: 8
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+      
+    # PyTorch模型
+    NeuralRanker:
+      hidden_units: [256, 128, 64]
+      learning_rate: 0.001
+      epochs: 15
+      batch_size: 64
+      dropout_rate: 0.2
+      weight_decay: 1e-5
+      early_stopping_patience: 5
+      
+    RankNet:
+      hidden_units: [128, 64, 32]
+      learning_rate: 0.001
+      epochs: 20
+      batch_size: 128
+      dropout_rate: 0.3
+      weight_decay: 1e-4
+      early_stopping_patience: 7
+      
+    TransformerRanker:
+      num_heads: 4
+      num_layers: 2
+      d_model: 64
+      dff: 128
+      learning_rate: 0.001
+      epochs: 15
+      batch_size: 64
+      dropout_rate: 0.1
+      max_seq_length: 16
+      weight_decay: 1e-5
+      early_stopping_patience: 5
+      warmup_steps: 1000
+    
+    LambdaMART: 
+      'n_estimators': 100,
+      'learning_rate': 0.1,
+      'max_depth': 6,
+      'subsample': 0.8,
+      'colsample_bytree': 0.8,
+      'random_state': 42
 
-# 模型预测配置
+    'ListNet': 
+    'n_estimators': 100,
+    'learning_rate': 0.05,
+    'max_depth': 7,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'random_state': 42
+
+
+# ===== 预测配置 =====
 prediction:
-  # 要预测的数据段
   segments: [0, 1, 2]
-  
-  # 使用的模型名称
-  model_name: "XGBRanker"
-  
-  # 是否使用GPU加速
   use_gpu: true
+  enable_business_rules: false
   
-  # 随机种子
-  random_state: 42
+  # 模型选择（自动根据模式选择）
+  model_names: null  # null表示自动选择
+  traditional_model_names: ['XGBRanker', 'LGBMRanker']
+  pytorch_model_names: ['XGBRanker', 'LGBMRanker', 'NeuralRanker', 'RankNet']
+  
+  # 集成权重配置
+  ensemble_weights:
+    XGBRanker: 0.3
+    LGBMRanker: 0.3  
+    NeuralRanker: 0.2
+    RankNet: 0.2
+    
+  # 预测优化
+  prediction_optimization:
+    batch_size: 10000        
+    memory_efficient: true   
+    cache_predictions: false 
+    
+  # PyTorch特定预测配置
+  pytorch_prediction:
+    ensemble_method: 'average'  # 'average', 'voting', 'weighted'
+    save_individual: true       # 保存单个模型的预测结果
+    validation_sample_size: 10  # 验证时的抽样大小
 
-# 流水线执行配置
+# ===== 性能监控配置 =====
+monitoring:
+  enabled: true
+  
+  # 监控指标
+  metrics:
+    - training_time
+    - memory_usage
+    - validation_score
+    - model_size
+    - gpu_usage      # PyTorch模式专用
+    
+  # 性能阈值告警
+  thresholds:
+    max_training_time: 1800    
+    max_memory_usage: 8192     
+    min_validation_score: 0.5  
+    max_gpu_memory: 4096       # PyTorch模式专用 (MB)
+
+# ===== 流水线配置 =====
 pipeline:
-  # 是否执行数据处理阶段
   run_data_processing: true
-  
-  # 是否执行模型训练阶段
   run_training: true
-  
-  # 是否执行模型预测阶段
   run_prediction: true
   
-  # 失败时是否继续执行后续阶段
-  continue_on_failure: false
+  # 并行策略
+  parallel_strategy:
+    auto_parallel: true
+    max_workers: null  # null=自动检测
+    
+  # 流水线行为
+  continue_on_error: true      # 某个步骤失败时是否继续
+  save_intermediate: true      # 保存中间结果
+  cleanup_intermediate: false  # 清理中间文件
 
-# 日志配置
+# ===== 日志配置 =====
 logging:
-  # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
   level: "INFO"
-  
-  # 日志格式
   format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
-  
-  # 日志时间格式
   datefmt: "%Y-%m-%d %H:%M:%S"
+  
+  # 详细日志选项
+  detailed_logging:
+    model_training: true     
+    data_processing: false   
+    memory_monitoring: true  
+    performance_metrics: true 
+    pytorch_operations: true   # PyTorch操作日志
+    
+  # 文件日志
+  file_logging:
+    enabled: true
+    max_size: "100MB"
+    backup_count: 5
+    separate_pytorch_log: true  # PyTorch模式使用单独日志文件
 
-# 高级配置
+# ===== 实验追踪配置 =====
+experiment_tracking:
+  enabled: true
+  experiment_name: "flight_ranking_integrated"
+  backend: "mlflow"  # 未来扩展用
+  
+  # 实验参数
+  track_parameters: true
+  track_metrics: true
+  track_artifacts: true
+  
+  # PyTorch特定追踪
+  pytorch_tracking:
+    track_model_architecture: true
+    track_gradients: false
+    track_weights: false
+    save_checkpoints: true
+
+# ===== 兼容性配置 =====
+compatibility:
+  # 向后兼容
+  support_legacy_config: true
+  legacy_model_loading: true
+  
+  # 前向兼容
+  ignore_unknown_params: true
+  validate_config: true
+  
+  # 模式转换
+  auto_config_migration: true  # 自动迁移配置到合适的模式
+
+# ===== 高级配置 =====
 advanced:
-  # 内存使用优化
+  # 调试选项
+  debug_mode: false
+  verbose_imports: false
+  profile_performance: false
+  
+  # 优化选项
   memory_optimization: true
+  cpu_optimization: true
+  gpu_optimization: true
   
-  # 并行处理优化
-  parallel_optimization: true
-  
-  # 临时文件清理
-  cleanup_temp_files: true
+  # 安全选项
+  safe_mode: true              # 安全模式，出错时使用简化版本
+  max_retry_attempts: 3        # 最大重试次数
+  error_recovery: true         # 错误恢复
 
-# 验证配置
-validation:
-  # 数据完整性检查
-  check_data_integrity: true
-  
-  # 模型性能验证
-  validate_model_performance: true
-  
-  # 预测结果验证
-  validate_predictions: true
-
-# 性能监控配置
-monitoring:
-  # 是否启用性能监控
-  enable_monitoring: true
-  
-  # 内存使用监控
-  monitor_memory: true
-  
-  # 处理时间监控
-  monitor_timing: true
+# ===== 特定模式覆盖配置 =====
+mode_overrides:
+  # 当使用PyTorch模式时的配置覆盖
+  pytorch_mode:
+    training:
+      model_names: ['XGBRanker', 'LGBMRanker', 'NeuralRanker', 'RankNet']
+      enable_auto_tuning: false  # PyTorch模式下默认关闭自动调参以节省时间
+    prediction:
+      model_names: ['XGBRanker', 'LGBMRanker', 'NeuralRanker', 'RankNet']
+    paths:
+      output_dir: "data/aeroclub-recsys-2025/results"
+      
+  # 当使用传统模式时的配置覆盖  
+  traditional_mode:
+    training:
+      model_names: ['XGBRanker', 'LGBMRanker']
+      enable_auto_tuning: true   # 传统模式可以启用自动调参
+    prediction:
+      model_names: ['XGBRanker', 'LGBMRanker']
+    paths:
+      output_dir: "data/aeroclub-recsys-2025/submissions"

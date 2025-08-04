@@ -15,7 +15,6 @@ class DataSegment:
         self.chunk_size = chunk_size
         self.n_processes = n_processes or min(cpu_count(), 8)
         self.logger = logger
-        
         if self.logger:
             self.logger.info(f"初始化DataSegment: {self.n_processes} 个进程, chunk_size={chunk_size}")
     
@@ -162,13 +161,28 @@ class DataSegment:
         
         total_rows = 0
         if dfs:
+            # 1. 合并所有DataFrame
             combined_df = pd.concat(dfs, ignore_index=True)
             
-            combined_df.to_parquet(final_filepath, index=False)
-            total_rows = len(combined_df)
+            # 2. 剔除恒定值列（所有值相同或全为NaN的列）
+            constant_columns = []
+            for col in combined_df.columns:
+                if combined_df[col].nunique(dropna=False) <= 1:  # 考虑全为NaN的情况
+                    constant_columns.append(col)
             
-            if self.logger:
-                self.logger.info(f"分割合并完成: {final_filepath}, 共 {total_rows} 行")
+            if constant_columns:
+                self.logger.info(f"剔除 {len(constant_columns)} 个恒定值列: {constant_columns}")
+                combined_df = combined_df.drop(columns=constant_columns)
+            
+            # 最终处理
+            final_df = combined_df.sort_values(by='Id')
+            final_df.to_parquet(final_filepath, index=False)
+            total_rows = len(final_df)
+            
+            # 日志记录最终结果
+            self.logger.info(f"处理后数据形状: {final_df.shape}")
+            self.logger.info(f"分割合并完成: {final_filepath}, 共 {total_rows} 行")
+            
         else:
             # 如果dfs为空，创建空文件
             empty_df = pd.DataFrame()
@@ -249,7 +263,7 @@ class DataSegment:
         
         return final_classification
     
-    def process_file(self, input_file: str, data_type: str, output_dir: str) -> Dict[int, int]:
+    def process_file(self, input_file: str, data_type: str, output_dir: str, pre_classification=False) -> Dict[int, int]:
         """
         处理单个文件进行分割
         返回：{segment_level: row_count}
@@ -265,7 +279,8 @@ class DataSegment:
         
         try:
             # 步骤1：预先分类所有ranker_id
-            ranker_classification = self._get_ranker_segment_classification(input_file)
+            if pre_classification:
+                ranker_classification = self._get_ranker_segment_classification(input_file)
             
             # 步骤2：创建批次
             batches = self._create_batches_from_row_groups(input_file, self.chunk_size)
@@ -370,7 +385,7 @@ class DataSegment:
     def verify_segmentation(self, input_file: str, output_dir: str, data_type: str) -> Dict:
         """验证分割结果的完整性"""
         if self.logger:
-            self.logger.info("开始验证分割结果...")
+            self.logger.info(f"开始验证 {data_type} 数据集的分割结果...")
         
         # 读取原始文件统计
         original_df = pd.read_parquet(input_file)
@@ -396,8 +411,9 @@ class DataSegment:
         # 检查完整性
         row_match = original_rows == total_segmented_rows
         ranker_match = original_rankers == len(segmented_rankers)
-        
+
         result = {
+            'data_type': data_type,
             'original': {'rows': original_rows, 'rankers': original_rankers},
             'segmented': {'total_rows': total_segmented_rows, 'total_rankers': len(segmented_rankers)},
             'segments': segment_stats,
