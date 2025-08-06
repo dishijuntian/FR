@@ -178,45 +178,174 @@ class FlightRankingModelsManager:
         
         return trained_models
     
-    def predict_ensemble(self, X: np.ndarray, model_names: List[str] = None,
-                        weights: List[float] = None) -> np.ndarray:
-        """集成预测"""
+    def predict_model(self, X: np.ndarray, validation_scores: Dict[str, float] = None, 
+                    model_names: List[str] = None) -> np.ndarray:
+        """
+        基于验证得分的加权预测函数
+        
+        Args:
+            X: 特征矩阵
+            validation_scores: 各模型的验证得分字典 {model_name: score}
+            model_names: 要使用的模型名称列表，如果为None则使用所有已加载的模型
+        
+        Returns:
+            预测分数数组
+        """
         if model_names is None:
-            model_names = [name for name, model in self.models.items() 
-                          if hasattr(model, 'is_fitted') and model.is_fitted]
+            model_names = list(self.models.keys())
         
-        if not model_names:
-            raise ValueError("没有已训练的模型可用于预测")
+        # 过滤出可用的模型
+        available_models = []
+        available_scores = {}
         
-        if weights is None:
-            weights = [1.0] * len(model_names)
+        for name in model_names:
+            if name in self.models and hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted:
+                available_models.append(name)
+                # 如果有验证分数，使用验证分数，否则设为相等权重
+                if validation_scores and name in validation_scores:
+                    available_scores[name] = validation_scores[name]
+                else:
+                    available_scores[name] = 1.0  # 默认权重
         
-        # 标准化权重
-        weights = np.array(weights) / np.sum(weights)
+        if not available_models:
+            raise ValueError("没有可用的已训练模型")
         
+        self.logger.info(f"使用 {len(available_models)} 个模型进行预测: {available_models}")
+        
+        # 计算加权平均的权重
+        if validation_scores:
+            # 使用验证得分计算权重（得分越高权重越大）
+            weights = self._calculate_performance_weights(available_scores)
+            self.logger.info(f"基于验证得分的权重: {dict(zip(available_models, weights))}")
+        else:
+            # 等权重
+            weights = [1.0 / len(available_models)] * len(available_models)
+            self.logger.info("使用等权重预测")
+        
+        # 收集所有模型的预测结果
         predictions = []
         valid_weights = []
         
-        for i, name in enumerate(model_names):
-            if name in self.models and hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted:
-                try:
-                    pred = self.models[name].predict(X)
-                    predictions.append(pred)
-                    valid_weights.append(weights[i])
-                except Exception as e:
-                    self.logger.warning(f"✗ {name} 预测失败: {e}")
+        for i, model_name in enumerate(available_models):
+            try:
+                model = self.models[model_name]
+                pred = model.predict(X)
+                predictions.append(pred)
+                valid_weights.append(weights[i])
+                self.logger.info(f"✓ {model_name} 预测完成，权重: {weights[i]:.4f}")
+            except Exception as e:
+                self.logger.warning(f"✗ {model_name} 预测失败: {e}")
+                continue
         
         if not predictions:
             raise ValueError("所有模型预测都失败")
         
-        # 重新标准化权重
-        valid_weights = np.array(valid_weights) / np.sum(valid_weights)
+        # 加权平均预测
+        predictions = np.array(predictions)
+        valid_weights = np.array(valid_weights)
         
-        # 集成预测
-        ensemble_pred = np.average(predictions, axis=0, weights=valid_weights)
-        self.logger.info(f"集成预测完成，使用 {len(predictions)} 个模型")
+        # 重新归一化权重
+        valid_weights = valid_weights / np.sum(valid_weights)
         
-        return ensemble_pred
+        # 计算加权平均
+        final_predictions = np.average(predictions, axis=0, weights=valid_weights)
+        
+        self.logger.info(f"✓ 加权集成预测完成，使用 {len(predictions)} 个模型")
+        
+        return final_predictions
+
+    def _calculate_performance_weights(self, scores: Dict[str, float], 
+                                    weight_strategy: str = 'softmax') -> List[float]:
+        """
+        基于验证得分计算模型权重
+        
+        Args:
+            scores: 各模型的验证得分
+            weight_strategy: 权重计算策略 ('softmax', 'linear', 'rank')
+        
+        Returns:
+            权重列表
+        """
+        if not scores:
+            return []
+        
+        score_values = list(scores.values())
+        score_array = np.array(score_values)
+        
+        if weight_strategy == 'softmax':
+            # 使用softmax函数，突出最好的模型
+            # 先放大差异，然后应用softmax
+            scaled_scores = (score_array - np.min(score_array)) * 10
+            exp_scores = np.exp(scaled_scores)
+            weights = exp_scores / np.sum(exp_scores)
+            
+        elif weight_strategy == 'linear':
+            # 线性归一化权重
+            min_score = np.min(score_array)
+            max_score = np.max(score_array)
+            if max_score == min_score:
+                weights = np.ones(len(score_array)) / len(score_array)
+            else:
+                normalized_scores = (score_array - min_score) / (max_score - min_score)
+                # 避免权重为0，给最小权重0.1
+                weights = 0.1 + 0.9 * normalized_scores
+                weights = weights / np.sum(weights)
+                
+        elif weight_strategy == 'rank':
+            # 基于排名的权重
+            ranks = len(score_array) - np.argsort(np.argsort(score_array))
+            weights = ranks / np.sum(ranks)
+            
+        else:
+            # 默认等权重
+            weights = np.ones(len(score_array)) / len(score_array)
+        
+        return weights.tolist()
+
+    def get_best_model_name(self, validation_scores: Dict[str, float] = None) -> Optional[str]:
+        """
+        获取验证得分最好的模型名称
+        
+        Args:
+            validation_scores: 验证得分字典
+        
+        Returns:
+            最好模型的名称，如果没有得分则返回None
+        """
+        if not validation_scores:
+            return None
+        
+        # 找到得分最高的模型
+        best_model = max(validation_scores.items(), key=lambda x: x[1])
+        self.logger.info(f"最佳模型: {best_model[0]} (NDCG@10: {best_model[1]:.4f})")
+        
+        return best_model[0]
+
+    def predict_with_best_model(self, X: np.ndarray, validation_scores: Dict[str, float] = None) -> np.ndarray:
+        """
+        使用验证得分最好的单个模型进行预测
+        
+        Args:
+            X: 特征矩阵
+            validation_scores: 验证得分字典
+        
+        Returns:
+            预测分数数组
+        """
+        best_model_name = self.get_best_model_name(validation_scores)
+        
+        if best_model_name is None or best_model_name not in self.models:
+            # 如果没有验证得分或最佳模型不可用，使用第一个可用模型
+            available_models = [name for name in self.models.keys() 
+                            if hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted]
+            if not available_models:
+                raise ValueError("没有可用的已训练模型")
+            best_model_name = available_models[0]
+            self.logger.info(f"使用第一个可用模型: {best_model_name}")
+        else:
+            self.logger.info(f"使用最佳模型进行预测: {best_model_name}")
+        
+        return self.models[best_model_name].predict(X)
     
     def save_models(self, save_dir: str):
         """保存模型"""

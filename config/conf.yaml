@@ -37,7 +37,8 @@ training:
   segments: [0, 1, 2]
   
   # 扩展的模型列表（包含所有新模型）
-  model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
+  model_names: ['XGBRanker', 'LGBMRanker', 'LambdaMART']
+  # model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
   
   use_gpu: true
   random_state: 42
@@ -147,22 +148,13 @@ prediction:
   segments: [0, 1, 2]
   
   # 扩展的模型列表
-  model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
+  model_names: ['XGBRanker', 'LGBMRanker', 'LambdaMART']
+  # model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
   
   use_gpu: true
   enable_business_rules: false
   
-  # 更新的集成权重配置（包含新模型）
-  ensemble_weights:
-    XGBRanker: 0.20
-    LGBMRanker: 0.20  
-    RankNet: 0.15
-    LambdaMART: 0.15      # 新增
-    ListNet: 0.10         # 新增
-    TransformerRanker: 0.10  # 新增
-    NeuralRanker: 0.05    # 新增
-    BM25Ranker: 0.05      # 新增
-    
+  
   # 预测优化
   prediction_optimization:
     batch_size: 10000        # 预测批大小
@@ -179,7 +171,7 @@ prediction:
 model_selection:
   # 数据量自适应模型选择
   data_adaptive:
-    enabled: true
+    enabled: false
     
     # 根据数据量选择模型
     size_based_selection:
@@ -193,11 +185,6 @@ model_selection:
       low_feature_models: ['XGBRanker', 'LGBMRanker', 'BM25Ranker']  # <50 features
       high_feature_models: ['TransformerRanker', 'NeuralRanker']     # >200 features
   
-  # 模型组合策略
-  ensemble_strategy:
-    diversity_optimization: true    # 优化模型多样性
-    performance_weighting: true    # 基于性能的权重
-    dynamic_selection: false       # 动态模型选择
 
 # 性能监控配置
 monitoring:

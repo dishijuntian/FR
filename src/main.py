@@ -79,10 +79,7 @@ def create_basic_config():
             'segments': [0, 1, 2],
             'model_names': ['XGBRanker', 'LGBMRanker'],
             'use_gpu': True,
-            'ensemble_weights': {
-                'XGBRanker': 0.5,
-                'LGBMRanker': 0.5
-            }
+
         },
         'pipeline': {
             'run_data_processing': True,

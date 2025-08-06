@@ -34,11 +34,12 @@ class FlightRankingPredictor:
         self.segments = prediction_config.get('segments', [0, 1, 2])
         self.model_names = prediction_config.get('model_names', ['XGBRanker', 'LGBMRanker'])
         self.use_gpu = prediction_config.get('use_gpu', True)
-        self.ensemble_weights = prediction_config.get('ensemble_weights', {})
         self.use_full_data = config.get('training', {}).get('use_full_data', False)
         
         self.logger.info("预测器初始化完成")
     
+    # 在predict_segment方法中的相关部分修改为：
+
     def predict_segment(self, segment_id: int, save_individual: bool = False) -> pd.DataFrame:
         """预测单个数据段"""
         self.logger.info(f"开始预测 segment_{segment_id}")
@@ -52,18 +53,14 @@ class FlightRankingPredictor:
         df = pd.read_parquet(test_file)
         self.logger.info(f"加载测试数据: {df.shape}")
         
-        # 加载模型
-        models_manager = self._load_segment_models(segment_id)
+        # 加载模型和验证得分
+        models_manager, validation_scores = self._load_segment_models_with_scores(segment_id)
         
         # 数据预处理
         X, _, groups, _, _ = models_manager.prepare_data(df, target_col='selected')
         
-        # 获取集成权重
-        available_models = [name for name in self.model_names if name in models_manager.models]
-        weights = [self.ensemble_weights.get(name, 1.0) for name in available_models]
-        
-        # 集成预测
-        predictions = models_manager.predict_ensemble(X, available_models, weights)
+        # 使用加权预测（基于验证得分）
+        predictions = models_manager.predict_model(X, validation_scores, self.model_names)
         
         # 生成排名
         rankings = self._generate_rankings(predictions, groups)
@@ -85,6 +82,40 @@ class FlightRankingPredictor:
         self.logger.info(f"✓ segment_{segment_id} 预测完成 (时间: {prediction_time:.1f}s)")
         
         return results
+
+    def _load_segment_models_with_scores(self, segment_id: int) -> Tuple[FlightRankingModelsManager, Dict]:
+        """加载数据段的模型和验证得分"""
+        if self.use_full_data:
+            segment_dir = self.model_save_path / "full_data"
+        else:
+            segment_dir = self.model_save_path / f"segment_{segment_id}"
+        
+        if not segment_dir.exists():
+            raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
+        
+        # 加载模型
+        models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
+        models_manager.load_models(str(segment_dir), self.model_names)
+        
+        if not models_manager.models:
+            raise ValueError(f"没有成功加载模型")
+        
+        # 加载验证得分
+        validation_scores = {}
+        report_file = segment_dir / "training_report.json"
+        if report_file.exists():
+            try:
+                with open(report_file, 'r') as f:
+                    report = json.load(f)
+                    validation_scores = report.get('validation_scores', {})
+            except Exception as e:
+                self.logger.warning(f"无法加载验证得分: {e}")
+        
+        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
+        if validation_scores:
+            self.logger.info(f"验证得分: {validation_scores}")
+        
+        return models_manager, validation_scores
     
     def predict_all_segments(self) -> pd.DataFrame:
         """预测所有数据段"""
@@ -185,7 +216,6 @@ class FlightRankingPredictor:
                 'total_samples': len(results),
                 'total_time': total_time,
                 'models_used': self.model_names,
-                'ensemble_weights': self.ensemble_weights,
                 'use_full_data': self.use_full_data
             },
             'data_statistics': {
