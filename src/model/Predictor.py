@@ -1,154 +1,43 @@
 """
-航班排名预测器
+航班排名预测器 - 重构版
+专注于预测逻辑，移除重复的数据处理和配置代码
 """
 
 import os
 import time
 import logging
-import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import json
-import pickle
 
 import numpy as np
 import pandas as pd
 
 from .Manager import FlightRankingModelsManager
 
-warnings.filterwarnings('ignore')
-
 
 class FlightRankingPredictor:
-    """航班排名预测器"""
+    """航班排名预测器 - 重构版，专注于预测协调"""
     
     def __init__(self, config: Dict, logger=None):
-        """
-        初始化预测器
-        
-        Args:
-            config: 配置字典
-            logger: 日志器
-        """
         self.config = config
-        self.logger = logger or self._setup_logger()
+        self.logger = logger or logging.getLogger(__name__)
         
         # 路径配置
         self.data_path = Path(config['paths']['model_input_dir'])
         self.model_save_path = Path(config['paths']['model_save_dir'])
         self.output_path = Path(config['paths']['output_dir'])
-        
-        # 预测配置
-        prediction_config = config['prediction']
-        self.segments = prediction_config['segments']
-        self.model_names = prediction_config['model_names']
-        self.use_gpu = prediction_config['use_gpu']
-        self.enable_business_rules = prediction_config['enable_business_rules']
-        self.ensemble_weights = prediction_config.get('ensemble_weights', {})
-        
-        # 确保输出目录存在
         self.output_path.mkdir(parents=True, exist_ok=True)
         
+        # 预测配置
+        prediction_config = config.get('prediction', {})
+        self.segments = prediction_config.get('segments', [0, 1, 2])
+        self.model_names = prediction_config.get('model_names', ['XGBRanker', 'LGBMRanker'])
+        self.use_gpu = prediction_config.get('use_gpu', True)
+        self.ensemble_weights = prediction_config.get('ensemble_weights', {})
+        self.use_full_data = config.get('training', {}).get('use_full_data', False)
+        
         self.logger.info("预测器初始化完成")
-    
-    def _setup_logger(self) -> logging.Logger:
-        """设置日志"""
-        logger = logging.getLogger(__name__)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s | %(levelname)8s | %(name)s | %(message)s'
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-    
-    def load_segment_models(self, segment_id: int) -> Dict:
-        """加载数据段的模型"""
-        segment_dir = self.model_save_path / f"segment_{segment_id}"
-        
-        if not segment_dir.exists():
-            raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
-        
-        models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
-        models_manager.load_models(str(segment_dir), self.model_names)
-        
-        if not models_manager.models:
-            raise ValueError(f"没有成功加载 segment_{segment_id} 的模型")
-        
-        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
-        return models_manager
-    
-    def load_segment_features(self, segment_id: int) -> List[str]:
-        """加载数据段的特征名称"""
-        feature_path = self.model_save_path / f"segment_{segment_id}" / "features.pkl"
-        
-        if not feature_path.exists():
-            raise FileNotFoundError(f"特征文件不存在: {feature_path}")
-        
-        with open(feature_path, 'rb') as f:
-            features = pickle.load(f)
-        
-        self.logger.info(f"加载特征: {len(features)} 个")
-        return features
-    
-    def generate_rankings(self, scores: np.ndarray, groups: np.ndarray) -> np.ndarray:
-        """根据分数生成排名"""
-        unique_groups = np.unique(groups)
-        rankings = np.zeros(len(scores), dtype=int)
-        
-        for group_id in unique_groups:
-            group_mask = groups == group_id
-            group_scores = scores[group_mask]
-            group_indices = np.where(group_mask)[0]
-            
-            # 按分数降序排序
-            sort_indices = np.argsort(-group_scores)
-            
-            # 生成排名 (1-based)
-            group_rankings = np.arange(1, len(group_scores) + 1)
-            rankings[group_indices[sort_indices]] = group_rankings
-        
-        return rankings
-    
-    def validate_rankings(self, rankings: np.ndarray, groups: np.ndarray) -> bool:
-        """验证排名的有效性"""
-        unique_groups = np.unique(groups)
-        
-        for group_id in unique_groups:
-            group_mask = groups == group_id
-            group_rankings = rankings[group_mask]
-            
-            # 检查排名是否是1到N的连续整数
-            expected_rankings = set(range(1, len(group_rankings) + 1))
-            actual_rankings = set(group_rankings)
-            
-            if expected_rankings != actual_rankings:
-                self.logger.error(f"组 {group_id} 排名无效")
-                return False
-        
-        return True
-    
-    def apply_business_rules(self, scores: np.ndarray, features: pd.DataFrame) -> np.ndarray:
-        """应用业务规则调整分数"""
-        if not self.enable_business_rules:
-            return scores
-        
-        adjusted_scores = scores.copy()
-        
-        # 示例业务规则
-        if 'total_price' in features.columns:
-            high_price_mask = features['total_price'] > features['total_price'].quantile(0.9)
-            adjusted_scores[high_price_mask] *= 0.9
-        
-        if 'departure_hour' in features.columns:
-            early_mask = features['departure_hour'] < 6
-            late_mask = features['departure_hour'] > 22
-            adjusted_scores[early_mask | late_mask] *= 0.95
-        
-        self.logger.info("业务规则调整完成")
-        return adjusted_scores
     
     def predict_segment(self, segment_id: int, save_individual: bool = False) -> pd.DataFrame:
         """预测单个数据段"""
@@ -164,44 +53,35 @@ class FlightRankingPredictor:
         self.logger.info(f"加载测试数据: {df.shape}")
         
         # 加载模型
-        models_manager = self.load_segment_models(segment_id)
+        models_manager = self._load_segment_models(segment_id)
         
         # 数据预处理
-        X, _, groups, _, processed_df = models_manager.prepare_data(df, target_col='selected')
+        X, _, groups, _, _ = models_manager.prepare_data(df, target_col='selected')
         
-        # 获取权重
-        weights = []
-        available_models = []
-        for model_name in self.model_names:
-            if model_name in models_manager.models:
-                available_models.append(model_name)
-                weights.append(self.ensemble_weights.get(model_name, 1.0))
+        # 获取集成权重
+        available_models = [name for name in self.model_names if name in models_manager.models]
+        weights = [self.ensemble_weights.get(name, 1.0) for name in available_models]
         
         # 集成预测
         predictions = models_manager.predict_ensemble(X, available_models, weights)
         
-        # 应用业务规则
-        predictions = self.apply_business_rules(predictions, processed_df)
-        
         # 生成排名
-        rankings = self.generate_rankings(predictions, groups)
+        rankings = self._generate_rankings(predictions, groups)
         
         # 验证排名
-        if not self.validate_rankings(rankings, groups):
+        if not self._validate_rankings(rankings, groups):
             raise ValueError(f"segment_{segment_id} 排名验证失败")
         
         # 生成结果
         results = df[['Id', 'ranker_id']].copy()
         results['selected'] = rankings
         
-        # 保存结果
-        prediction_time = time.time() - start_time
-        
         if save_individual:
             output_file = self.output_path / f"predictions_segment_{segment_id}.csv"
             results.to_csv(output_file, index=False)
             self.logger.info(f"✓ 保存到: {output_file}")
         
+        prediction_time = time.time() - start_time
         self.logger.info(f"✓ segment_{segment_id} 预测完成 (时间: {prediction_time:.1f}s)")
         
         return results
@@ -237,10 +117,65 @@ class FlightRankingPredictor:
         self._generate_prediction_report(final_submission, total_time)
         
         self.logger.info(f"✓ 所有预测完成 (总时间: {total_time:.1f}s)")
-        self.logger.info(f"✓ 最终结果: {output_file}")
-        self.logger.info(f"✓ 总记录数: {len(final_submission)}")
+        self.logger.info(f"✓ 最终结果: {output_file}, 总记录数: {len(final_submission)}")
         
         return final_submission
+    
+    def _load_segment_models(self, segment_id: int) -> FlightRankingModelsManager:
+        """加载数据段的模型"""
+        if self.use_full_data:
+            segment_dir = self.model_save_path / "full_data"
+        else:
+            segment_dir = self.model_save_path / f"segment_{segment_id}"
+        
+        if not segment_dir.exists():
+            raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
+        
+        models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
+        models_manager.load_models(str(segment_dir), self.model_names)
+        
+        if not models_manager.models:
+            raise ValueError(f"没有成功加载模型")
+        
+        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
+        return models_manager
+    
+    def _generate_rankings(self, scores: np.ndarray, groups: np.ndarray) -> np.ndarray:
+        """根据分数生成排名"""
+        unique_groups = np.unique(groups)
+        rankings = np.zeros(len(scores), dtype=int)
+        
+        for group_id in unique_groups:
+            group_mask = groups == group_id
+            group_scores = scores[group_mask]
+            group_indices = np.where(group_mask)[0]
+            
+            # 按分数降序排序
+            sort_indices = np.argsort(-group_scores)
+            
+            # 生成排名 (1-based)
+            group_rankings = np.arange(1, len(group_scores) + 1)
+            rankings[group_indices[sort_indices]] = group_rankings
+        
+        return rankings
+    
+    def _validate_rankings(self, rankings: np.ndarray, groups: np.ndarray) -> bool:
+        """验证排名的有效性"""
+        unique_groups = np.unique(groups)
+        
+        for group_id in unique_groups:
+            group_mask = groups == group_id
+            group_rankings = rankings[group_mask]
+            
+            # 检查排名是否是1到N的连续整数
+            expected_rankings = set(range(1, len(group_rankings) + 1))
+            actual_rankings = set(group_rankings)
+            
+            if expected_rankings != actual_rankings:
+                self.logger.error(f"组 {group_id} 排名无效")
+                return False
+        
+        return True
     
     def _generate_prediction_report(self, results: pd.DataFrame, total_time: float):
         """生成预测报告"""
@@ -249,9 +184,9 @@ class FlightRankingPredictor:
                 'segments': self.segments,
                 'total_samples': len(results),
                 'total_time': total_time,
-                'avg_time_per_sample': total_time / len(results) * 1000,  # ms
                 'models_used': self.model_names,
-                'ensemble_weights': self.ensemble_weights
+                'ensemble_weights': self.ensemble_weights,
+                'use_full_data': self.use_full_data
             },
             'data_statistics': {
                 'total_rankers': results['ranker_id'].nunique(),
