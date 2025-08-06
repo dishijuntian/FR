@@ -44,7 +44,7 @@ training:
   random_state: 42
   
   # 全量数据训练配置（新增）
-  use_full_data: false  # 设置为true启用全量数据训练
+  use_full_data: true  # 设置为true启用全量数据训练
   
   full_data_config:
     # 全量数据采样策略
