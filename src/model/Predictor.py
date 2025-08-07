@@ -1,6 +1,6 @@
 """
-航班排名预测器 - 修复版本
-适配现有的模型文件结构: XGBRanker_segment_X.pkl
+航班排名预测器 - 重构版
+专注于预测逻辑，移除重复的数据处理和配置代码
 """
 
 import os
@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import json
-import joblib
 
 import numpy as np
 import pandas as pd
@@ -18,7 +17,7 @@ from .Manager import FlightRankingModelsManager
 
 
 class FlightRankingPredictor:
-    """航班排名预测器 - 修复版本，适配现有模型文件结构"""
+    """航班排名预测器 - 重构版，专注于预测协调"""
     
     def __init__(self, config: Dict, logger=None):
         self.config = config
@@ -39,8 +38,10 @@ class FlightRankingPredictor:
         
         self.logger.info("预测器初始化完成")
     
+    # 在predict_segment方法中的相关部分修改为：
+
     def predict_segment(self, segment_id: int, save_individual: bool = False) -> pd.DataFrame:
-        """预测单个数据段 - 适配现有文件结构"""
+        """预测单个数据段"""
         self.logger.info(f"开始预测 segment_{segment_id}")
         start_time = time.time()
         
@@ -52,8 +53,8 @@ class FlightRankingPredictor:
         df = pd.read_parquet(test_file)
         self.logger.info(f"加载测试数据: {df.shape}")
         
-        # 加载模型 - 适配现有文件结构
-        models_manager, validation_scores = self._load_segment_models_legacy(segment_id)
+        # 加载模型和验证得分
+        models_manager, validation_scores = self._load_segment_models_with_scores(segment_id)
         
         # 数据预处理
         X, _, groups, _, _ = models_manager.prepare_data(df, target_col='selected')
@@ -81,48 +82,38 @@ class FlightRankingPredictor:
         self.logger.info(f"✓ segment_{segment_id} 预测完成 (时间: {prediction_time:.1f}s)")
         
         return results
-    
-    def _load_segment_models_legacy(self, segment_id: int) -> Tuple[FlightRankingModelsManager, Dict]:
-        """加载模型 - 适配现有的文件命名格式: XGBRanker_segment_X.pkl"""
+
+    def _load_segment_models_with_scores(self, segment_id: int) -> Tuple[FlightRankingModelsManager, Dict]:
+        """加载数据段的模型和验证得分"""
+        if self.use_full_data:
+            segment_dir = self.model_save_path / "full_data"
+        else:
+            segment_dir = self.model_save_path / f"segment_{segment_id}"
         
-        # 检查现有的模型文件格式
-        available_models = {}
-        validation_scores = {}
+        if not segment_dir.exists():
+            raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
         
-        for model_name in self.model_names:
-            # 查找格式: ModelName_segment_X.pkl
-            model_file = self.model_save_path / f"{model_name}_segment_{segment_id}.pkl"
-            
-            if model_file.exists():
-                try:
-                    # 直接加载模型文件
-                    model = joblib.load(model_file)
-                    available_models[model_name] = model
-                    
-                    # 设置默认验证得分（因为没有training_report.json）
-                    validation_scores[model_name] = 0.8  # 默认得分
-                    
-                    self.logger.info(f"成功加载模型: {model_file}")
-                    
-                except Exception as e:
-                    self.logger.warning(f"加载模型失败: {model_file}, 错误: {e}")
-                    continue
-            else:
-                self.logger.warning(f"模型文件不存在: {model_file}")
-        
-        if not available_models:
-            raise FileNotFoundError(f"segment_{segment_id} 没有找到任何可用的模型文件")
-        
-        # 创建模型管理器并设置加载的模型
+        # 加载模型
         models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
-        models_manager.models = available_models
+        models_manager.load_models(str(segment_dir), self.model_names)
         
-        # 设置模型为已训练状态
-        for model_name, model in available_models.items():
-            if hasattr(model, 'is_fitted'):
-                model.is_fitted = True
+        if not models_manager.models:
+            raise ValueError(f"没有成功加载模型")
         
-        self.logger.info(f"成功加载 {len(available_models)} 个模型: {list(available_models.keys())}")
+        # 加载验证得分
+        validation_scores = {}
+        report_file = segment_dir / "training_report.json"
+        if report_file.exists():
+            try:
+                with open(report_file, 'r') as f:
+                    report = json.load(f)
+                    validation_scores = report.get('validation_scores', {})
+            except Exception as e:
+                self.logger.warning(f"无法加载验证得分: {e}")
+        
+        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
+        if validation_scores:
+            self.logger.info(f"验证得分: {validation_scores}")
         
         return models_manager, validation_scores
     
@@ -160,6 +151,25 @@ class FlightRankingPredictor:
         self.logger.info(f"✓ 最终结果: {output_file}, 总记录数: {len(final_submission)}")
         
         return final_submission
+    
+    def _load_segment_models(self, segment_id: int) -> FlightRankingModelsManager:
+        """加载数据段的模型"""
+        if self.use_full_data:
+            segment_dir = self.model_save_path / "full_data"
+        else:
+            segment_dir = self.model_save_path / f"segment_{segment_id}"
+        
+        if not segment_dir.exists():
+            raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
+        
+        models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
+        models_manager.load_models(str(segment_dir), self.model_names)
+        
+        if not models_manager.models:
+            raise ValueError(f"没有成功加载模型")
+        
+        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
+        return models_manager
     
     def _generate_rankings(self, scores: np.ndarray, groups: np.ndarray) -> np.ndarray:
         """根据分数生成排名"""
@@ -206,8 +216,7 @@ class FlightRankingPredictor:
                 'total_samples': len(results),
                 'total_time': total_time,
                 'models_used': self.model_names,
-                'use_full_data': self.use_full_data,
-                'file_structure': 'legacy'  # 标记使用了传统文件结构
+                'use_full_data': self.use_full_data
             },
             'data_statistics': {
                 'total_rankers': results['ranker_id'].nunique(),

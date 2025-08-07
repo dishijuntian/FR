@@ -240,8 +240,10 @@ class FlightRankingCore:
         
         # 检查模型文件
         model_path = Path(self.config['paths']['model_save_dir'])
-
-        model_dir = model_path
+        if self.use_full_data:
+            model_dir = model_path / "full_data"
+        else:
+            model_dir = model_path
         
         if not any(model_dir.glob("**/*.pkl")):
             self.logger.error("没有找到训练好的模型")
