@@ -223,7 +223,7 @@ monitoring:
 # 流水线配置
 pipeline:
   run_data_processing: false
-  run_training: false
+  run_training: true
   run_prediction: true
   
   # 执行模式选择
