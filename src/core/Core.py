@@ -1,350 +1,280 @@
+"""
+航班排名系统核心控制器 - 重构版
+专注于流水线协调，移除重复的配置和检查逻辑
+"""
+
 import os
 import sys
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 
-# 添加项目根目录到Python路径
+# 修复模块导入路径
 current_path = Path(__file__).parent
 project_root = current_path.parent.parent
+sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
-from src.data.DataProcessor import DataProcessor
-from src.model.Trainer import FlightRankingTrainer
-from src.model.Predictor import FlightRankingPredictor
+# 修复后的导入
+try:
+    from src.data.DataProcessor import DataProcessor
+    from src.model.Trainer import FlightRankingTrainer
+    from src.model.Predictor import FlightRankingPredictor
+except ImportError:
+    try:
+        from data.DataProcessor import DataProcessor
+        from model.Trainer import FlightRankingTrainer
+        from model.Predictor import FlightRankingPredictor
+    except ImportError:
+        print("错误: 无法导入必要模块")
+        print("请确保以下文件存在:")
+        print("- src/data/DataProcessor.py")
+        print("- src/model/Trainer.py") 
+        print("- src/model/Predictor.py")
+        raise
+
+# 简单的工具函数
+def setup_logger(name):
+    import logging
+    return logging.getLogger(name)
 
 
 class FlightRankingCore:
-    """
-    航班排名系统核心控制器
-    整合数据处理、模型训练和预测功能
-    """
+    """航班排名系统核心控制器 - 重构版"""
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.project_root = project_root
+        
+        # 基础配置
+        self.use_full_data = config.get('training', {}).get('use_full_data', False)
+        
         self._setup_environment()
         self._setup_logging()
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
+        self._init_components()
         
-        # 初始化组件
-        self._init_data_processor()
-        self._init_model_trainer()
-        self._init_model_predictor()
+        self.logger.info("核心控制器初始化完成")
     
     def _setup_environment(self):
         """设置工作环境"""
-        # 设置工作目录到项目根目录
         os.chdir(self.project_root)
-        self.logger_setup = False
-        
         # 确保必要目录存在
-        required_dirs = [
-            self.config['paths']['data_dir'],
-            self.config['paths']['model_save_dir'],
-            self.config['paths']['output_dir'],
-            self.config['paths']['log_dir']
-        ]
-        
-        for dir_path in required_dirs:
-            os.makedirs(dir_path, exist_ok=True)
+        for path_key in ['data_dir', 'model_save_dir', 'output_dir', 'log_dir']:
+            path = self.config.get('paths', {}).get(path_key)
+            if path:
+                Path(path).mkdir(parents=True, exist_ok=True)
     
     def _setup_logging(self):
         """设置日志系统"""
-        if self.logger_setup:
-            return
-            
-        log_level = getattr(logging, self.config['logging']['level'].upper())
-        log_format = self.config['logging']['format']
+        log_config = self.config.get('logging', {})
+        log_file = Path(self.config['paths'].get('log_dir', 'logs')) / \
+                  f"flight_ranking_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         
-        # 清除现有处理器
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-        
-        # 创建格式化器
-        formatter = logging.Formatter(log_format)
-        
-        # 控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(log_level)
-        
-        # 文件处理器
-        log_file = os.path.join(
-            self.config['paths']['log_dir'],
-            f"flight_ranking_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        )
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(logging.DEBUG)
-        
-        # 配置根日志器
         logging.basicConfig(
-            level=log_level,
-            handlers=[console_handler, file_handler],
+            level=getattr(logging, log_config.get('level', 'INFO').upper()),
+            format=log_config.get('format', '%(asctime)s - %(levelname)s - %(message)s'),
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(log_file, encoding='utf-8')
+            ],
             force=True
         )
-        
-        self.logger_setup = True
     
-    def _init_data_processor(self):
-        """初始化数据处理器"""
-        data_config = self.config['data_processing']
-        
+    def _init_components(self):
+        """初始化组件"""
+        # 数据处理器
         self.data_processor = DataProcessor(
             base_dir=self.config['paths']['data_dir'],
-            chunk_size=data_config['chunk_size'],
-            n_processes=data_config.get('n_processes'),
-            logger=self.logger  # 传递核心logger
+            chunk_size=self.config.get('data_processing', {}).get('chunk_size', 200000),
+            n_processes=self.config.get('data_processing', {}).get('n_processes'),
+            logger=self.logger,
+            config=self.config.get('data_processing', {})
         )
+        
+        # 模型训练器和预测器
+        self.model_trainer = FlightRankingTrainer(self.config, self.logger)
+        self.model_predictor = FlightRankingPredictor(self.config, self.logger)
+        
+        # 显示模式信息
+        mode = "全量数据" if self.use_full_data else "分段数据"
+        gpu_mode = "GPU" if self.config.get('training', {}).get('use_gpu') else "CPU"
+        self.logger.info(f"运行模式: {mode} + {gpu_mode}")
     
-    def _init_model_trainer(self):
-        """初始化模型训练器"""
-        training_config = self.config['training']
-        
-        self.model_trainer = FlightRankingTrainer(
-            data_path=os.path.join(self.project_root, self.config['paths']['data_dir'], "segmented"),
-            model_save_path=self.config['paths']['model_save_dir'],
-            use_gpu=training_config['use_gpu'],
-            random_state=training_config['random_state'],
-            logger=self.logger  # 传递核心logger
-        )
-    
-    def _init_model_predictor(self):
-        """初始化模型预测器"""
-        prediction_config = self.config['prediction']
-        
-        self.model_predictor = FlightRankingPredictor(
-            data_path=os.path.join(self.project_root, self.config['paths']['data_dir'], "segmented"),
-            model_save_path=self.config['paths']['model_save_dir'],
-            output_path=self.config['paths']['output_dir'],
-            use_gpu=prediction_config['use_gpu'],
-            random_state=prediction_config['random_state'],
-            logger=self.logger  # 传递核心logger
-        )
-    
-    def run_data_processing(self, force: bool = None, verify: bool = None) -> bool:
-        """
-        执行数据处理流水线
-        
-        Args:
-            force: 是否强制重新处理，如果为None则使用配置文件设置
-            verify: 是否验证处理结果，如果为None则使用配置文件设置
-            
-        Returns:
-            bool: 处理是否成功
-        """
-        self.logger.info("=" * 60)
-        self.logger.info("开始数据处理阶段")
-        self.logger.info("=" * 60)
-        
-        # 使用参数或配置文件设置
-        data_config = self.config['data_processing']
-        force = force if force is not None else data_config.get('force_reprocess', False)
-        verify = verify if verify is not None else data_config.get('verify_results', True)
+    def run_data_processing(self, force: bool = False) -> bool:
+        """执行数据处理"""
+        self.logger.info("开始数据处理")
         
         try:
-            success = self.data_processor.process_pipeline(force=force, verify=verify)
+            force = force or self.config.get('data_processing', {}).get('force_reprocess', False)
+            success = self.data_processor.process_pipeline(force=force)
             
             if success:
-                self.logger.info("数据处理阶段完成")
-                return True
+                self.logger.info("✓ 数据处理完成")
             else:
-                self.logger.error("数据处理阶段失败")
-                return False
-                
+                self.logger.error("✗ 数据处理失败")
+            
+            return success
         except Exception as e:
-            self.logger.error(f"数据处理阶段异常: {str(e)}")
+            self.logger.error(f"数据处理异常: {e}")
             return False
     
-    def run_model_training(self, segments: list = None) -> bool:
-        """
-        执行模型训练
-        
-        Args:
-            segments: 要训练的数据段列表，如果为None则使用配置文件设置
-            
-        Returns:
-            bool: 训练是否成功
-        """
-        self.logger.info("=" * 60)
-        self.logger.info("开始模型训练阶段")
-        self.logger.info("=" * 60)
-        
-        # 使用参数或配置文件设置
-        training_config = self.config['training']
-        segments = segments if segments is not None else training_config['segments']
+    def run_model_training(self) -> bool:
+        """执行模型训练"""
+        self.logger.info("开始模型训练")
         
         try:
-            results = self.model_trainer.train_all(segments=segments)
-            
-            if results:
-                self.logger.info("模型训练阶段完成")
-                return True
-            else:
-                self.logger.error("模型训练阶段失败")
+            # 检查数据是否存在
+            if not self._check_training_data():
                 return False
-                
+            
+            results = self.model_trainer.train_all_segments()
+            success = len(results) > 0
+            
+            if success:
+                mode = "全量数据" if self.use_full_data else "分段"
+                self.logger.info(f"✓ {mode}模型训练完成")
+                self._log_training_stats(results)
+            else:
+                self.logger.error("✗ 模型训练失败")
+            
+            return success
         except Exception as e:
-            self.logger.error(f"模型训练阶段异常: {str(e)}")
+            self.logger.error(f"模型训练异常: {e}")
             return False
     
-    def run_model_prediction(self, segments: list = None, model_name: str = None) -> bool:
-        """
-        执行模型预测
-        
-        Args:
-            segments: 要预测的数据段列表，如果为None则使用配置文件设置
-            model_name: 模型名称，如果为None则使用配置文件设置
-            
-        Returns:
-            bool: 预测是否成功
-        """
-        self.logger.info("=" * 60)
-        self.logger.info("开始模型预测阶段")
-        self.logger.info("=" * 60)
-        
-        # 使用参数或配置文件设置
-        prediction_config = self.config['prediction']
-        segments = segments if segments is not None else prediction_config['segments']
-        model_name = model_name if model_name is not None else prediction_config['model_name']
+    def run_model_prediction(self) -> bool:
+        """执行模型预测"""
+        self.logger.info("开始模型预测")
         
         try:
-            results = self.model_predictor.predict_all(segments=segments, model_name=model_name)
-            
-            if results is not None:
-                self.logger.info("模型预测阶段完成")
-                return True
-            else:
-                self.logger.error("模型预测阶段失败")
+            if not self._check_prediction_data():
                 return False
-                
+            
+            results = self.model_predictor.predict_all_segments()
+            success = results is not None and len(results) > 0
+            
+            if success:
+                self.logger.info(f"✓ 模型预测完成，记录数: {len(results)}")
+            else:
+                self.logger.error("✗ 模型预测失败")
+            
+            return success
         except Exception as e:
-            self.logger.error(f"模型预测阶段异常: {str(e)}")
+            self.logger.error(f"模型预测异常: {e}")
             return False
     
-    def run_full_pipeline(self) -> bool:
-        """
-        执行完整的流水线：数据处理 -> 模型训练 -> 模型预测
-        
-        Returns:
-            bool: 整个流水线是否成功
-        """
-        self.logger.info("=" * 80)
+    def run_full_pipeline(self, **kwargs) -> bool:
+        """执行完整流水线"""
         self.logger.info("开始完整流水线执行")
-        self.logger.info("=" * 80)
-        
-        pipeline_config = self.config['pipeline']
         start_time = datetime.now()
         
         try:
-            # 阶段1: 数据处理
-            if pipeline_config['run_data_processing']:
+            pipeline_config = self.config.get('pipeline', {})
+            
+            # 执行各阶段
+            if pipeline_config.get('run_data_processing', True):
                 if not self.run_data_processing():
-                    self.logger.error("数据处理失败，终止流水线")
                     return False
-            else:
-                self.logger.info("跳过数据处理阶段")
             
-            # 阶段2: 模型训练
-            if pipeline_config['run_training']:
+            if pipeline_config.get('run_training', True):
                 if not self.run_model_training():
-                    self.logger.error("模型训练失败，终止流水线")
                     return False
-            else:
-                self.logger.info("跳过模型训练阶段")
             
-            # 阶段3: 模型预测
-            if pipeline_config['run_prediction']:
+            if pipeline_config.get('run_prediction', True):
                 if not self.run_model_prediction():
-                    self.logger.error("模型预测失败，终止流水线")
                     return False
-            else:
-                self.logger.info("跳过模型预测阶段")
             
-            # 完成统计
             total_time = datetime.now() - start_time
-            self.logger.info("=" * 80)
-            self.logger.info("完整流水线执行成功!")
-            self.logger.info(f"总耗时: {total_time}")
-            self.logger.info("=" * 80)
+            self.logger.info(f"✓ 完整流水线执行成功，耗时: {total_time}")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"流水线执行异常: {str(e)}")
+            self.logger.error(f"流水线执行异常: {e}")
             return False
     
-    def get_pipeline_status(self) -> Dict[str, Any]:
-        """
-        获取流水线各阶段的状态
+    def _check_training_data(self) -> bool:
+        """检查训练数据"""
+        if self.use_full_data:
+            # 检查全量数据
+            data_path = Path(self.config['paths']['model_input_dir'])
+            train_dir = data_path / "train"
+            
+            if train_dir.exists() and list(train_dir.glob("*.parquet")):
+                return True
+            
+            # 检查其他可能的文件
+            possible_files = ["train.parquet", "training_data.parquet"]
+            if any((data_path / f).exists() for f in possible_files):
+                return True
+            
+            self.logger.error("未找到全量训练数据")
+            return False
+        else:
+            # 检查分段数据
+            train_path = Path(self.config['paths']['model_input_dir']) / "train"
+            segments = self.config.get('training', {}).get('segments', [0, 1, 2])
+            
+            for segment in segments:
+                file_path = train_path / f"train_segment_{segment}.parquet"
+                if not file_path.exists():
+                    self.logger.error(f"训练数据不存在: {file_path}")
+                    return False
+            
+            self.logger.info(f"✓ 分段训练数据检查通过: {segments}")
+            return True
+    
+    def _check_prediction_data(self) -> bool:
+        """检查预测数据"""
+        test_path = Path(self.config['paths']['model_input_dir']) / "test"
+        segments = self.config.get('prediction', {}).get('segments', [0, 1, 2])
         
-        Returns:
-            Dict: 包含各阶段状态的字典
-        """
-        status = {
-            'data_processing': self.data_processor.get_pipeline_status(),
-            'model_files': self._get_model_files_status(),
-            'prediction_files': self._get_prediction_files_status()
+        # 检查测试数据
+        for segment in segments:
+            file_path = test_path / f"test_segment_{segment}.parquet"
+            if not file_path.exists():
+                self.logger.error(f"测试数据不存在: {file_path}")
+                return False
+        
+        # 检查模型文件
+        model_path = Path(self.config['paths']['model_save_dir'])
+
+        model_dir = model_path
+        
+        if not any(model_dir.glob("**/*.pkl")):
+            self.logger.error("没有找到训练好的模型")
+            return False
+        
+        return True
+    
+    def _log_training_stats(self, results: Dict):
+        """记录训练统计信息"""
+        if self.use_full_data and 'full_data' in results:
+            result = results['full_data']
+            self.logger.info(f"训练统计: {result.get('n_rankers', 0)} rankers, "
+                           f"{result.get('training_time', 0):.1f}s, "
+                           f"{len(result.get('models', {}))} 模型")
+        else:
+            total_time = sum(r.get('training_time', 0) for r in results.values())
+            total_models = sum(len(r.get('models', {})) for r in results.values())
+            self.logger.info(f"训练统计: {len(results)} 段, "
+                           f"{total_time:.1f}s, {total_models} 模型")
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """获取系统状态"""
+        try:
+            import torch
+            gpu_available = torch.cuda.is_available()
+        except ImportError:
+            gpu_available = False
+        
+        return {
+            'core_version': 'refactored_v1.0',
+            'training_mode': 'full_data' if self.use_full_data else 'segments',
+            'system_info': {
+                'gpu_available': gpu_available,
+            },
+            'supported_models': self.config.get('training', {}).get('model_names', [])
         }
-        
-        return status
-    
-    def _get_model_files_status(self) -> Dict[str, bool]:
-        """检查模型文件状态"""
-        model_dir = self.config['paths']['model_save_dir']
-        segments = self.config['training']['segments']
-        model_names = ['XGBRanker', 'LGBMRanker']
-        
-        status = {}
-        for segment in segments:
-            for model_name in model_names:
-                model_file = os.path.join(model_dir, f"{model_name}_segment_{segment}.pkl")
-                status[f"{model_name}_segment_{segment}"] = os.path.exists(model_file)
-        
-        return status
-    
-    def _get_prediction_files_status(self) -> Dict[str, bool]:
-        """检查预测文件状态"""
-        output_dir = self.config['paths']['output_dir']
-        segments = self.config['prediction']['segments']
-        model_name = self.config['prediction']['model_name']
-        
-        status = {}
-        for segment in segments:
-            pred_file = os.path.join(output_dir, f"{model_name}_segment_{segment}_prediction.csv")
-            status[f"segment_{segment}_prediction"] = os.path.exists(pred_file)
-        
-        final_file = os.path.join(output_dir, f"{model_name}_final_submission.csv")
-        status['final_submission'] = os.path.exists(final_file)
-        
-        return status
-    
-    def print_status_report(self):
-        """打印详细的状态报告"""
-        self.logger.info("=" * 60)
-        self.logger.info("流水线状态报告")
-        self.logger.info("=" * 60)
-        
-        status = self.get_pipeline_status()
-        
-        # 数据处理状态
-        self.logger.info("数据处理状态:")
-        for data_type, state in status['data_processing'].items():
-            self.logger.info(f"  {data_type}:")
-            self.logger.info(f"    编码: {'✓' if state['encoded'] else '✗'}")
-            self.logger.info(f"    分割: {'✓' if state['segmented'] else '✗'}")
-            self.logger.info(f"    验证: {'✓' if state['verified'] else '✗'}")
-        
-        # 模型文件状态
-        self.logger.info("\n模型文件状态:")
-        for model_file, exists in status['model_files'].items():
-            self.logger.info(f"  {model_file}: {'✓' if exists else '✗'}")
-        
-        # 预测文件状态
-        self.logger.info("\n预测文件状态:")
-        for pred_file, exists in status['prediction_files'].items():
-            self.logger.info(f"  {pred_file}: {'✓' if exists else '✗'}")
-        
-        self.logger.info("=" * 60)
