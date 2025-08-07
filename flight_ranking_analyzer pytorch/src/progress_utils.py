@@ -1,327 +1,207 @@
 """
-进度条工具模块
+进度显示工具 - 重构版
 
-该模块提供统一的进度条显示功能
-- 支持数据加载进度
-- 支持模型训练进度
-- 支持预测进度
-- 支持文件处理进度
+专注于：
+- 统一的进度条显示
+- 简化的接口
+- 可选的Rich支持
 
 作者: Flight Ranking Team
-版本: 2.1
+版本: 4.0 (重构版)
 """
 
 from tqdm import tqdm
-import time
 from typing import Optional, Any, Iterator
 from contextlib import contextmanager
-import sys
 
+# 可选的Rich支持
 try:
     from rich.console import Console
-    from rich.progress import (
-        Progress, TaskID, BarColumn, TextColumn, 
-        TimeRemainingColumn, TimeElapsedColumn,
-        MofNCompleteColumn, SpinnerColumn
-    )
-    from rich.text import Text
-    from rich.live import Live
+    from rich.progress import Progress, TaskID, BarColumn, TextColumn, TimeRemainingColumn
     RICH_AVAILABLE = True
+    console = Console()
 except ImportError:
     RICH_AVAILABLE = False
+    console = None
 
 
-class ProgressTracker:
-    """进度跟踪器"""
+class ProgressBar:
+    """统一的进度条接口"""
     
-    def __init__(self, use_rich: bool = True):
+    def __init__(self, total: Optional[int] = None, description: str = "Processing", 
+                 use_rich: bool = True):
         """
-        初始化进度跟踪器
+        初始化进度条
         
         Args:
-            use_rich: 是否使用rich库的高级进度条
-        """
-        self.use_rich = use_rich and RICH_AVAILABLE
-        self.console = Console() if self.use_rich else None
-        self.current_progress = None
-        
-    def create_progress(self, description: str, total: Optional[int] = None, 
-                       show_speed: bool = True) -> 'ProgressContext':
-        """
-        创建进度条上下文
-        
-        Args:
-            description: 进度描述
             total: 总步数
-            show_speed: 是否显示速度
-            
-        Returns:
-            ProgressContext: 进度条上下文管理器
-        """
-        return ProgressContext(
-            description=description,
-            total=total,
-            show_speed=show_speed,
-            use_rich=self.use_rich,
-            console=self.console
-        )
-    
-    def simple_progress(self, iterable, description: str = "Processing") -> Iterator:
-        """
-        简单进度条包装器
-        
-        Args:
-            iterable: 可迭代对象
             description: 描述文字
-            
-        Returns:
-            Iterator: 带进度条的迭代器
+            use_rich: 是否使用Rich（如果可用）
         """
-        if self.use_rich:
-            return tqdm(iterable, desc=description, 
-                       bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]')
-        else:
-            return tqdm(iterable, desc=description)
-
-
-class ProgressContext:
-    """进度条上下文管理器"""
-    
-    def __init__(self, description: str, total: Optional[int] = None,
-                 show_speed: bool = True, use_rich: bool = True, 
-                 console: Optional[Any] = None):
-        self.description = description
         self.total = total
-        self.show_speed = show_speed
-        self.use_rich = use_rich
-        self.console = console
+        self.description = description
+        self.use_rich = use_rich and RICH_AVAILABLE
+        
         self.progress = None
         self.task_id = None
-        self.pbar = None
-        
+        self.tqdm_bar = None
+    
     def __enter__(self):
-        if self.use_rich and self.console:
-            # 使用rich进度条
+        if self.use_rich:
             self.progress = Progress(
-                SpinnerColumn(),
                 TextColumn("[bold blue]{task.description}"),
                 BarColumn(),
-                MofNCompleteColumn(),
-                TextColumn("•"),
-                TimeElapsedColumn(),
-                TextColumn("•"),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TimeRemainingColumn(),
-                console=self.console
+                console=console
             )
             self.progress.start()
-            self.task_id = self.progress.add_task(
-                self.description, 
-                total=self.total
-            )
-            return self
+            self.task_id = self.progress.add_task(self.description, total=self.total)
         else:
-            # 使用tqdm进度条
-            self.pbar = tqdm(
+            self.tqdm_bar = tqdm(
                 total=self.total,
                 desc=self.description,
-                unit="items" if self.total else "it",
-                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
             )
-            return self
+        
+        return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.progress:
             self.progress.stop()
-        if self.pbar:
-            self.pbar.close()
+        if self.tqdm_bar:
+            self.tqdm_bar.close()
     
     def update(self, advance: int = 1, description: Optional[str] = None):
         """更新进度"""
         if self.progress and self.task_id is not None:
-            self.progress.update(
-                self.task_id, 
-                advance=advance,
-                description=description or self.description
-            )
-        elif self.pbar:
-            self.pbar.update(advance)
             if description:
-                self.pbar.set_description(description)
+                self.progress.update(self.task_id, description=description, advance=advance)
+            else:
+                self.progress.update(self.task_id, advance=advance)
+        elif self.tqdm_bar:
+            self.tqdm_bar.update(advance)
+            if description:
+                self.tqdm_bar.set_description(description)
     
     def set_total(self, total: int):
         """设置总数"""
-        self.total = total
         if self.progress and self.task_id is not None:
             self.progress.update(self.task_id, total=total)
-        elif self.pbar:
-            self.pbar.total = total
-    
-    def set_description(self, description: str):
-        """设置描述"""
-        if self.progress and self.task_id is not None:
-            self.progress.update(self.task_id, description=description)
-        elif self.pbar:
-            self.pbar.set_description(description)
+        elif self.tqdm_bar:
+            self.tqdm_bar.total = total
 
 
-class ModelTrainingProgress:
-    """模型训练进度显示"""
+@contextmanager
+def progress_bar(iterable=None, total: Optional[int] = None, 
+                description: str = "Processing", use_rich: bool = True):
+    """
+    进度条上下文管理器
     
-    def __init__(self, model_names: list, use_rich: bool = True):
-        self.model_names = model_names
-        self.use_rich = use_rich and RICH_AVAILABLE
-        self.console = Console() if self.use_rich else None
-        self.current_model_idx = 0
+    Args:
+        iterable: 可迭代对象（可选）
+        total: 总步数
+        description: 描述文字
+        use_rich: 是否使用Rich
         
-    @contextmanager
-    def training_session(self):
-        """训练会话上下文"""
-        if self.use_rich:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold green]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TextColumn("•"),
-                TimeElapsedColumn(),
-                console=self.console
-            ) as progress:
-                overall_task = progress.add_task(
-                    "总体训练进度", 
-                    total=len(self.model_names)
-                )
-                model_task = progress.add_task(
-                    "当前模型", 
-                    total=None
-                )
-                
-                yield ModelTrainingContext(progress, overall_task, model_task, self.model_names)
+    Yields:
+        ProgressBar或迭代器
+    """
+    if iterable is not None:
+        # 直接包装迭代器
+        if use_rich and RICH_AVAILABLE:
+            yield tqdm(iterable, desc=description, leave=False)
         else:
-            yield SimpleTrainingContext(self.model_names)
+            yield tqdm(iterable, desc=description)
+    else:
+        # 返回进度条对象
+        with ProgressBar(total=total, description=description, use_rich=use_rich) as pbar:
+            yield pbar
 
 
-class ModelTrainingContext:
-    """Rich进度条训练上下文"""
+def simple_progress(iterable, description: str = "Processing") -> Iterator:
+    """
+    简单进度条包装器
     
-    def __init__(self, progress, overall_task, model_task, model_names):
-        self.progress = progress
-        self.overall_task = overall_task
-        self.model_task = model_task
-        self.model_names = model_names
-        self.current_model_idx = 0
-    
-    def start_model(self, model_name: str, steps: Optional[int] = None):
-        """开始训练新模型"""
-        self.progress.update(
-            self.model_task,
-            description=f"训练 {model_name}",
-            completed=0,
-            total=steps
-        )
-    
-    def update_model_progress(self, advance: int = 1, description: Optional[str] = None):
-        """更新当前模型进度"""
-        self.progress.update(self.model_task, advance=advance)
-        if description:
-            self.progress.update(self.model_task, description=description)
-    
-    def finish_model(self, model_name: str, performance: float):
-        """完成当前模型训练"""
-        self.progress.update(
-            self.overall_task, 
-            advance=1,
-            description=f"已完成: {model_name} (HitRate@3: {performance:.4f})"
-        )
-        self.current_model_idx += 1
-
-
-class SimpleTrainingContext:
-    """简单训练上下文（无rich时使用）"""
-    
-    def __init__(self, model_names):
-        self.model_names = model_names
-        self.current_pbar = None
-        self.overall_pbar = tqdm(total=len(model_names), desc="总体进度", position=0)
+    Args:
+        iterable: 可迭代对象
+        description: 描述文字
         
-    def start_model(self, model_name: str, steps: Optional[int] = None):
-        """开始训练新模型"""
-        if self.current_pbar:
-            self.current_pbar.close()
+    Returns:
+        Iterator: 带进度条的迭代器
+    """
+    return tqdm(iterable, desc=description, leave=False)
+
+
+class TrainingProgress:
+    """训练进度显示器"""
+    
+    def __init__(self, model_names: list):
+        """
+        初始化训练进度
         
-        self.current_pbar = tqdm(
-            total=steps,
+        Args:
+            model_names: 模型名称列表
+        """
+        self.model_names = model_names
+        self.current_model = 0
+        self.overall_bar = None
+        self.model_bar = None
+    
+    def __enter__(self):
+        self.overall_bar = tqdm(
+            total=len(self.model_names),
+            desc="总体进度",
+            position=0,
+            leave=True
+        )
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.overall_bar:
+            self.overall_bar.close()
+        if self.model_bar:
+            self.model_bar.close()
+    
+    def start_model(self, model_name: str):
+        """开始训练新模型"""
+        if self.model_bar:
+            self.model_bar.close()
+        
+        self.model_bar = tqdm(
             desc=f"训练 {model_name}",
             position=1,
             leave=False
         )
     
-    def update_model_progress(self, advance: int = 1, description: Optional[str] = None):
-        """更新当前模型进度"""
-        if self.current_pbar:
-            self.current_pbar.update(advance)
-            if description:
-                self.current_pbar.set_description(description)
+    def update_model(self, description: str = None):
+        """更新模型进度"""
+        if self.model_bar and description:
+            self.model_bar.set_description(description)
     
-    def finish_model(self, model_name: str, performance: float):
-        """完成当前模型训练"""
-        if self.current_pbar:
-            self.current_pbar.close()
-            self.current_pbar = None
+    def finish_model(self, model_name: str, performance: float = None):
+        """完成模型训练"""
+        if self.model_bar:
+            self.model_bar.close()
+            self.model_bar = None
         
-        self.overall_pbar.update(1)
-        self.overall_pbar.set_description(f"已完成: {model_name} (HitRate@3: {performance:.4f})")
-    
-    def __del__(self):
-        """清理资源"""
-        if self.current_pbar:
-            self.current_pbar.close()
-        if self.overall_pbar:
-            self.overall_pbar.close()
+        self.overall_bar.update(1)
+        if performance is not None:
+            desc = f"完成: {model_name} (HitRate@3: {performance:.4f})"
+        else:
+            desc = f"完成: {model_name}"
+        self.overall_bar.set_description(desc)
 
 
-def create_file_progress(files: list, description: str = "处理文件") -> Iterator:
+def show_summary(title: str, results: dict):
     """
-    创建文件处理进度条
+    显示结果总结
     
     Args:
-        files: 文件列表
-        description: 描述文字
-        
-    Returns:
-        Iterator: 带进度条的文件迭代器
-    """
-    return tqdm(
-        files, 
-        desc=description,
-        unit="文件",
-        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
-    )
-
-
-def create_data_loading_progress(description: str = "加载数据") -> ProgressContext:
-    """
-    创建数据加载进度条
-    
-    Args:
-        description: 描述文字
-        
-    Returns:
-        ProgressContext: 进度条上下文
-    """
-    tracker = ProgressTracker()
-    return tracker.create_progress(description, show_speed=True)
-
-
-def show_completion_summary(results: dict, title: str = "完成总结"):
-    """
-    显示完成总结
-    
-    Args:
-        results: 结果字典
         title: 标题
+        results: 结果字典
     """
     if RICH_AVAILABLE:
-        console = Console()
         console.print(f"\n🎉 {title}", style="bold green")
         console.print("="*50, style="green")
         
@@ -340,12 +220,12 @@ def show_completion_summary(results: dict, title: str = "完成总结"):
                 print(f"{key}: {value}")
 
 
-# 简化的全局函数
-def progress_bar(iterable, desc: str = "Processing", **kwargs):
-    """全局进度条函数"""
-    return tqdm(iterable, desc=desc, **kwargs)
+# 向后兼容的简化函数
+def create_data_loading_progress(description: str = "加载数据"):
+    """创建数据加载进度条"""
+    return ProgressBar(description=description)
 
 
-def progress_range(n: int, desc: str = "Processing", **kwargs):
-    """进度条范围函数"""
-    return tqdm(range(n), desc=desc, **kwargs)
+def create_file_progress(files: list, description: str = "处理文件"):
+    """创建文件处理进度条"""
+    return simple_progress(files, description)
