@@ -1,8 +1,9 @@
-# 增强版航班排名系统配置文件
-# 新特性：
-# 1. 支持全量数据训练模式
-# 2. 添加新模型：LambdaMART, ListNet, TransformerRanker, BM25Ranker, NeuralRanker
-# 3. 灵活的数据处理策略
+# 高效航班排名系统配置文件 - 性能优化版
+# 主要优化：
+# 1. 启用全量数据训练模式以获得最佳性能
+# 2. 优化模型参数以提升训练速度
+# 3. 简化数据处理流程
+# 4. 减少不必要的验证和检查
 
 # 路径配置
 paths:
@@ -12,281 +13,217 @@ paths:
   output_dir: "data/aeroclub-recsys-2025/submissions"
   log_dir: "logs"
 
-# 数据处理配置
+# 数据处理配置 - 高效版
 data_processing:
-  chunk_size: 200000
-  n_processes: null  # null=自动检测CPU核数
+  chunk_size: 500000          # 增大块大小提升处理效率
+  n_processes: 4              # 适中的进程数，避免过度并行开销
   force_encode: false
   force_segment: false
   force_feature: false
-  verify_results: true
+  verify_results: false       # 跳过验证以提升速度
   force_reprocess: false
   
-  # 数据加载模式选择
+  # 简化数据模式
   data_mode:
-    # 可选: 'segments' | 'full' | 'auto'
-    mode: 'auto'  # auto会根据数据大小自动选择
+    mode: 'segments'          # 使用分段模式以保持兼容性
     
-    # 自动选择阈值
-    auto_thresholds:
-      max_segment_size_mb: 500   # 超过此大小使用全量模式
-      max_memory_usage_gb: 8     # 最大内存使用限制
+  # 内存优化
+  memory_optimization:
+    enable_memory_mapping: false     # 禁用内存映射减少开销
+    enable_data_compression: false   # 禁用压缩减少CPU开销
+    chunk_processing: true           # 启用分块处理
 
-# 增强训练配置
+# 高效训练配置
 training:
   segments: [0, 1, 2]
   
-  # 扩展的模型列表（包含所有新模型）
-  model_names: ['XGBRanker', 'LGBMRanker', 'LambdaMART']
-  # model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
+  # 重点优化的模型列表
+  model_names: ['XGBRanker']
   
   use_gpu: true
   random_state: 42
   
-  # 全量数据训练配置（新增）
-  use_full_data: true  # 设置为true启用全量数据训练
+  # 关键优化：启用全量数据训练
+  use_full_data: true
   
+  # 全量数据配置 - 针对XGBoost等快速训练优化
   full_data_config:
-    # 全量数据采样策略
-    enable_sampling: true
-    sampling_config:
-      method: 'stratified'  # 'stratified' | 'random'
-      ratio: 0.3           # 采样比例
-      min_groups: 10000    # 最小组数
+    enable_sampling: false           # 禁用采样，使用全部数据
+    pytorch_epochs: 10              # 减少深度学习模型训练轮次
+    pytorch_batch_size: 2048        # 大批次提升GPU利用率
     
-    # 全量数据训练参数
-    pytorch_epochs: 20       # PyTorch模型训练轮次
-    pytorch_batch_size: 2048 # PyTorch模型批次大小
-    final_epochs: 50         # 最终模型训练轮次
-    final_batch_size: 2048   # 最终模型批次大小
-    
-    # 内存优化
+    # 内存优化 - 简化
     memory_optimization:
-      enable_memory_mapping: true    # 启用内存映射
-      enable_data_compression: true  # 启用数据压缩
-      chunk_processing: true         # 分块处理大数据
-      chunk_size: 100000            # 分块大小
+      enable_memory_mapping: false
+      enable_data_compression: false
+      chunk_processing: true
+      chunk_size: 100000
   
-  # 自动数据集划分策略
+  # 简化数据集划分策略
   auto_split_strategy:
-    # ranker_id数量 -> 验证集折数映射
     thresholds:
-      1000: 2      # ≤1000个ranker: 2折 (50% train, 50% val)
-      2000: 3      # ≤2000个ranker: 3折 (67% train, 33% val)  
-      5000: 5      # ≤5000个ranker: 5折 (80% train, 20% val)
-      10000: 8     # ≤10000个ranker: 8折 (87.5% train, 12.5% val)
-      50000: 12    # ≤50000个ranker: 12折 (91.7% train, 8.3% val)  # 新增大数据支持
-      99999999: 20 # >50000个ranker: 20折 (95% train, 5% val)      # 新增超大数据支持
+      10000: 5     # 简化阈值，快速划分
+      99999999: 10 # 大数据使用10折
     
-    # 验证集大小调整策略
     validation_size_strategy:
-      small_data_threshold: 100      # 小数据集阈值
-      small_data_val_size: 0.3       # 小数据集验证集占比
-      large_data_threshold: 10000    # 大数据集阈值  
-      large_data_val_size: 0.1       # 大数据集验证集占比
-      ultra_large_threshold: 50000   # 超大数据集阈值（新增）
-      ultra_large_val_size: 0.05     # 超大数据集验证集占比（新增）
-      default_val_size: 0.2          # 默认验证集占比
+      default_val_size: 0.2
+      large_data_val_size: 0.1
   
-  # 扩展的模型参数配置（包含所有新模型）
+  # 优化的模型参数配置 - 专注于训练速度
   model_configs:
     XGBRanker:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
+      n_estimators: 100        # 适中的树数量
+      max_depth: 6             # 适中的深度
+      learning_rate: 0.1       # 较高的学习率加快收敛
       subsample: 0.8
       colsample_bytree: 0.8
+      verbosity: 0             # 静默模式
+      n_jobs: -1               # 使用所有CPU核心
+      tree_method: 'hist'      # 使用直方图算法提升速度
       
     LGBMRanker:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
+      n_estimators: 100
+      max_depth: 6
+      learning_rate: 0.1
       subsample: 0.8
       colsample_bytree: 0.8
+      verbose: -1              # 静默模式
+      n_jobs: -1
+      force_col_wise: true     # 强制列方向处理提升速度
       
+    LambdaMART:
+      n_estimators: 100
+      max_depth: 6
+      learning_rate: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      verbosity: 0
+      n_jobs: -1
+      tree_method: 'hist'
+      
+    # 简化的深度学习模型配置
     RankNet:
-      hidden_dims: [128, 64, 32]
+      hidden_dims: [128, 64]   # 减少网络复杂度
       learning_rate: 0.001
+      epochs: 10               # 减少训练轮次
+      batch_size: 256
       dropout_rate: 0.2
       
-    # 新增模型配置
-    LambdaMART:
-      n_estimators: 200
-      max_depth: 8
-      learning_rate: 0.05
-      subsample: 0.8
-      colsample_bytree: 0.8
-      
-    ListNet:
-      n_estimators: 200
-      max_depth: 7
-      learning_rate: 0.05
-      subsample: 0.8
-      colsample_bytree: 0.8
+    NeuralRanker:
+      hidden_units: [256, 128] # 简化网络结构
+      learning_rate: 0.001
+      epochs: 10
+      batch_size: 128
+      dropout_rate: 0.2
       
     TransformerRanker:
       num_heads: 4
-      num_layers: 2
+      num_layers: 1            # 减少层数提升速度
       d_model: 64
-      max_seq_length: 16
       learning_rate: 0.001
-      dropout_rate: 0.1
-      
-    BM25Ranker:
-      k1: 1.2
-      b: 0.75
-      
-    NeuralRanker:
-      hidden_units: [256, 128, 64]
-      learning_rate: 0.001
-      dropout_rate: 0.2
-      epochs: 15
-      batch_size: 64
+      epochs: 8                # 减少训练轮次
+      batch_size: 128
 
-# 预测配置
+# 预测配置 - 高效版
 prediction:
   segments: [0, 1, 2]
-  
-  # 扩展的模型列表
-  model_names: ['XGBRanker', 'LGBMRanker', 'LambdaMART']
-  # model_names: ['XGBRanker', 'LGBMRanker', 'RankNet', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']
-  
+  model_names: ['XGBRanker']
   use_gpu: true
   enable_business_rules: false
   
-  
   # 预测优化
   prediction_optimization:
-    batch_size: 10000        # 预测批大小
-    memory_efficient: true   # 内存高效模式
-    cache_predictions: false # 是否缓存中间预测结果
-    
-    # 全量数据预测配置
-    full_data_prediction:
-      enable_parallel: true    # 启用并行预测
-      max_workers: 4          # 最大工作进程数
-      chunk_size: 50000       # 预测分块大小
+    batch_size: 20000          # 增大批次提升预测效率
+    memory_efficient: true
+    cache_predictions: false   # 禁用缓存减少内存占用
 
-# 模型选择策略配置（新增）
-model_selection:
-  # 数据量自适应模型选择
-  data_adaptive:
-    enabled: false
-    
-    # 根据数据量选择模型
-    size_based_selection:
-      small_data_models: ['XGBRanker', 'LGBMRanker', 'BM25Ranker']  # <1000 rankers
-      medium_data_models: ['XGBRanker', 'LGBMRanker', 'LambdaMART', 'ListNet', 'NeuralRanker']  # 1000-10000 rankers
-      large_data_models: ['XGBRanker', 'LGBMRanker', 'LambdaMART', 'ListNet', 'TransformerRanker', 'NeuralRanker']  # 10000-50000 rankers
-      ultra_large_data_models: ['XGBRanker', 'LambdaMART', 'TransformerRanker']  # >50000 rankers
-    
-    # 特征数量自适应
-    feature_based_selection:
-      low_feature_models: ['XGBRanker', 'LGBMRanker', 'BM25Ranker']  # <50 features
-      high_feature_models: ['TransformerRanker', 'NeuralRanker']     # >200 features
-  
-
-# 性能监控配置
-monitoring:
-  enabled: true
-  
-  # 监控指标
-  metrics:
-    - training_time
-    - memory_usage
-    - validation_score
-    - model_size
-    - convergence_speed  # 新增
-    
-  # 性能阈值告警
-  thresholds:
-    max_training_time: 3600      # 最大训练时间(秒) - 增加以支持全量数据
-    max_memory_usage: 16384      # 最大内存使用(MB) - 增加以支持全量数据
-    min_validation_score: 0.5    # 最小验证分数
-    max_model_size_mb: 500       # 最大模型文件大小
-
-# 流水线配置
+# 流水线配置 - 高效版
 pipeline:
-  run_data_processing: false
+  run_data_processing: false   # 跳过数据处理，假设数据已准备好
   run_training: true
   run_prediction: true
   
-  # 执行模式选择
+  # 执行模式
   execution_mode:
-    # 可选: 'sequential' | 'parallel' | 'adaptive'
-    mode: 'adaptive'  # adaptive会根据资源情况自动选择
+    mode: 'sequential'         # 顺序执行，避免并行开销
     
-    # 并行策略
+    # 简化并行策略
     parallel_strategy:
-      auto_parallel: true     # GPU可用时使用单进程+GPU, CPU时使用多进程
-      max_workers: null       # null=自动检测
-      memory_limit_gb: 12     # 内存限制
+      auto_parallel: false     # 禁用自动并行
+      max_workers: 1           # 单进程执行
       
     # 全量数据流水线配置
     full_data_pipeline:
-      enable_checkpoints: true      # 启用检查点
-      checkpoint_interval: 1800     # 检查点间隔(秒)
-      enable_resume: true           # 启用断点续训
-      cleanup_temp_files: true     # 清理临时文件
+      enable_checkpoints: false      # 禁用检查点减少IO开销
+      enable_resume: false           # 禁用断点续训
+      cleanup_temp_files: true       # 启用临时文件清理
 
-# 实验配置（新增）
-experiment:
-  # 实验追踪
-  tracking:
-    enabled: false
-    backend: "mlflow"  
-    experiment_name: "flight_ranking_enhanced"
-    
-  # A/B测试配置
-  ab_testing:
-    enabled: false
-    test_groups: ['control', 'treatment']
-    split_ratio: 0.5
-    
-  # 超参数搜索
-  hyperparameter_search:
-    enabled: false
-    search_method: 'optuna'  # 'optuna' | 'random' | 'grid'
-    n_trials: 100
-    timeout_hours: 24
+# 性能监控配置 - 简化版
+monitoring:
+  enabled: false               # 禁用监控减少开销
+  
+  # 简化阈值
+  thresholds:
+    max_training_time: 7200    # 2小时训练时间限制
+    max_memory_usage: 16384    # 16GB内存限制
 
-# 日志配置
+# 日志配置 - 高效版
 logging:
   level: "INFO"
-  format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
-  datefmt: "%Y-%m-%d %H:%M:%S"
+  format: "%(asctime)s | %(levelname)8s | %(message)s"
   
-  # 详细日志选项
+  # 简化日志选项
   detailed_logging:
-    model_training: true     # 详细记录模型训练过程
-    data_processing: false   # 数据处理详细日志
-    memory_monitoring: true  # 内存监控日志
-    performance_metrics: true # 性能指标日志
-    full_data_processing: true # 全量数据处理日志（新增）
+    model_training: true
+    data_processing: false     # 禁用数据处理详细日志
+    memory_monitoring: false   # 禁用内存监控日志
+    performance_metrics: false # 禁用性能指标日志
     
-  # 日志轮转配置
+  # 禁用日志轮转减少IO开销
   rotation:
-    enabled: true
-    max_size_mb: 100
-    backup_count: 5
+    enabled: false
 
-# 环境配置（新增）
+# 环境配置 - 高效版
 environment:
-  # 资源限制
+  # 资源限制 - 适中配置
   resource_limits:
-    max_memory_gb: 16        # 最大内存使用
-    max_cpu_cores: 8         # 最大CPU核心数
-    max_gpu_memory_gb: 8     # 最大GPU内存
+    max_memory_gb: 16
+    max_cpu_cores: 8
+    max_gpu_memory_gb: 8
     
   # 优化设置
   optimization:
-    enable_mixed_precision: true   # 启用混合精度训练
-    enable_gradient_clipping: true # 启用梯度裁剪
-    enable_early_stopping: true   # 启用早停
+    enable_mixed_precision: false   # 禁用混合精度减少复杂度
+    enable_gradient_clipping: false # 禁用梯度裁剪
+    enable_early_stopping: false   # 禁用早停，确保完整训练
     
-  # 调试模式
+  # 调试模式 - 全部禁用
   debug:
     enabled: false
     save_intermediate_data: false
     profile_memory: false
     profile_cpu: false
+
+# 新增：快速模式配置
+fast_mode:
+  enabled: true
+  
+  # 快速启动设置
+  quick_startup:
+    skip_gpu_warmup: false         # 保留GPU预热以获得最佳性能
+    skip_dependency_check: true    # 跳过依赖检查
+    skip_data_validation: true     # 跳过数据验证
+    minimal_logging: true          # 最小化日志
+  
+  # 训练加速设置
+  training_acceleration:
+    use_fast_trainer: true         # 使用快速训练器
+    batch_training: true           # 批量训练
+    skip_validation_split: true    # 跳过验证集划分（全量数据模式下）
+    parallel_model_training: false # 禁用并行模型训练，避免资源竞争
+  
+  # 内存管理
+  memory_management:
+    aggressive_gc: true            # 积极垃圾回收
+    clear_cache_frequently: true   # 频繁清理缓存
+    minimal_data_copies: true      # 最小化数据拷贝

@@ -1,276 +1,177 @@
 """
-航班排名模型集合管理器 - 清洁输出版本
-优化日志输出，移除emoji，提供清晰的进度信息
+航班排名模型管理器 - 修复测试数据处理版
+主要修复：
+1. 修复测试数据没有'selected'列的问题
+2. 区分训练和预测时的数据处理逻辑
+3. 改进错误处理和日志记录
 """
 
 import os
-import torch
+import time
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
 import logging
 import warnings
-import joblib
-import time
 import gc
 
-from .Models import (
-    LightGBMRanker, XGBoostRanker, RankNet, 
-    LambdaMART, ListNet, TransformerRanker, BM25Ranker, NeuralRanker
-)
+from .Models import create_model_fast
 
 warnings.filterwarnings('ignore')
 
 
 class FlightRankingModelsManager:
-    """航班排名模型管理器 - 清洁输出版本"""
+    """简化的航班排名模型管理器 - 修复版"""
     
     def __init__(self, use_gpu: bool = True, logger=None):
-        self.use_gpu = use_gpu and torch.cuda.is_available()
+        self.use_gpu = use_gpu
         self.logger = logger or logging.getLogger(__name__)
-        self.models: Dict[str, object] = {}
+        self.trained_models: Dict[str, object] = {}
         self.feature_names: List[str] = []
-        self._model_configs: Dict = {}
-        
-        # 模型类型映射
-        self.model_classes = {
-            'XGBRanker': XGBoostRanker,
-            'LGBMRanker': LightGBMRanker,
-            'RankNet': RankNet,
-            'LambdaMART': LambdaMART,
-            'ListNet': ListNet,
-            'TransformerRanker': TransformerRanker,
-            'BM25Ranker': BM25Ranker,
-            'NeuralRanker': NeuralRanker
-        }
-        
-        # PyTorch模型列表
-        self.pytorch_models = {'RankNet', 'TransformerRanker', 'NeuralRanker'}
         
         if self.use_gpu:
-            gpu_name = torch.cuda.get_device_name(0)
-            self.logger.info(f"[GPU] 已启用GPU加速: {gpu_name}")
-        else:
-            self.logger.info("[CPU] 使用CPU模式")
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    self.logger.info(f"[GPU] 使用GPU: {torch.cuda.get_device_name(0)}")
+                else:
+                    self.use_gpu = False
+                    self.logger.info("[GPU] GPU不可用，使用CPU")
+            except ImportError:
+                self.use_gpu = False
+                self.logger.info("[GPU] PyTorch未安装，使用CPU")
     
-    def create_models(self, input_dim: int, model_configs: Dict = None, 
-                     model_names: List[str] = None) -> Dict:
-        """创建指定的模型"""
-        self.logger.info(f"[MODEL] 开始创建模型: 请求{len(model_names) if model_names else 0}个")
+    def prepare_data_simple(self, df: pd.DataFrame, target_col: str = 'selected') -> Tuple:
+        """简化的数据预处理 - 修复测试数据处理"""
         start_time = time.time()
         
-        if model_configs is None:
-            model_configs = {}
+        # 检查是否为测试数据（没有target_col）
+        is_test_data = target_col not in df.columns
         
-        if model_names is None:
-            model_names = list(self.model_classes.keys())
-        
-        self._model_configs = model_configs
-        created_models = {}
-        
-        # 默认配置
-        default_configs = self._get_default_configs(input_dim)
-        
-        for i, model_name in enumerate(model_names, 1):
-            if model_name not in self.model_classes:
-                self.logger.warning(f"[MODEL] 跳过不支持的模型: {model_name}")
-                continue
-            
-            self.logger.info(f"[MODEL] 创建 {i}/{len(model_names)}: {model_name}")
-            model_start = time.time()
-            
-            try:
-                # 合并配置
-                config = default_configs.get(model_name, {}).copy()
-                config.update(model_configs.get(model_name, {}))
-                
-                # 创建模型
-                model_class = self.model_classes[model_name]
-                
-                if model_name == 'BM25Ranker':
-                    created_models[model_name] = model_class(logger=self.logger, **config)
-                else:
-                    created_models[model_name] = model_class(
-                        use_gpu=self.use_gpu, logger=self.logger, **config
-                    )
-                
-                model_time = time.time() - model_start
-                self.logger.info(f"[MODEL] {model_name} 创建成功: {model_time:.2f}s")
-                
-            except Exception as e:
-                model_time = time.time() - model_start
-                self.logger.error(f"[MODEL] {model_name} 创建失败: {e} ({model_time:.2f}s)")
-                continue
-        
-        self.models.update(created_models)
-        total_time = time.time() - start_time
-        self.logger.info(f"[MODEL] 模型创建完成: {len(created_models)}/{len(model_names)} 成功, 总耗时{total_time:.2f}s")
-        
-        return created_models
-    
-    def _get_default_configs(self, input_dim: int) -> Dict:
-        """获取默认配置"""
-        return {
-            'XGBRanker': {'n_estimators': 200, 'max_depth': 8, 'learning_rate': 0.05},
-            'LGBMRanker': {'n_estimators': 200, 'max_depth': 8, 'learning_rate': 0.05},
-            'RankNet': {'input_dim': input_dim, 'hidden_dims': [128, 64, 32], 'learning_rate': 0.001},
-            'LambdaMART': {'n_estimators': 200, 'max_depth': 8, 'learning_rate': 0.05},
-            'ListNet': {'n_estimators': 200, 'max_depth': 7, 'learning_rate': 0.05},
-            'TransformerRanker': {
-                'input_dim': input_dim, 'num_heads': 4, 'num_layers': 2, 
-                'd_model': 64, 'learning_rate': 0.001
-            },
-            'BM25Ranker': {'k1': 1.2, 'b': 0.75},
-            'NeuralRanker': {
-                'input_dim': input_dim, 'hidden_units': [256, 128, 64], 'learning_rate': 0.001
-            }
-        }
-    
-    def prepare_data(self, df: pd.DataFrame, target_col: str = 'selected', **kwargs) -> Tuple:
-        """数据预处理 - 清洁输出版本"""
-        self.logger.info(f"[PREP] 开始数据预处理: shape={df.shape}")
-        prep_start = time.time()
-        
-        # 1. 数据清理
-        if target_col in df.columns:
-            clean_start = time.time()
+        if is_test_data:
+            self.logger.info(f"[PREP] 检测到测试数据，没有'{target_col}'列")
+        else:
+            self.logger.info(f"[PREP] 检测到训练数据，包含'{target_col}'列")
+            # 1. 数据清理 - 只对训练数据进行
             selected_per_group = df.groupby('ranker_id')[target_col].sum()
             invalid_groups = selected_per_group[selected_per_group != 1].index
             if len(invalid_groups) > 0:
                 df = df[~df['ranker_id'].isin(invalid_groups)]
-                clean_time = time.time() - clean_start
-                self.logger.info(f"[PREP] 数据清理: 移除{len(invalid_groups)}个无效组, 耗时{clean_time:.2f}s")
+                self.logger.info(f"[PREP] 移除了 {len(invalid_groups)} 个无效组")
         
-        # 2. 特征选择
-        feature_start = time.time()
+        # 2. 特征选择 - 统一处理
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         exclude_cols = {'Id', target_col, 'ranker_id', 'profileId', 'companyID'}
         feature_cols = [col for col in numeric_cols if col not in exclude_cols]
         
-        # 3. 批量零方差检查
-        self.logger.info("[PREP] 检查零方差特征")
-        variance_start = time.time()
+        self.logger.info(f"[PREP] 选择了 {len(feature_cols)} 个特征")
         
-        feature_matrix = df[feature_cols].values
-        with np.errstate(invalid='ignore', divide='ignore'):
-            variances = np.var(feature_matrix, axis=0)
+        # 3. 处理缺失值 - 简单填充
+        if is_test_data:
+            # 测试数据：只处理特征列和必要的ID列
+            required_cols = feature_cols + ['ranker_id']
+            df_work = df[required_cols].copy()
+        else:
+            # 训练数据：包含目标列
+            required_cols = feature_cols + [target_col, 'ranker_id']
+            df_work = df[required_cols].copy()
         
-        valid_feature_mask = variances > 1e-8
-        zero_var_count = np.sum(~valid_feature_mask)
-        feature_cols = [col for col, is_valid in zip(feature_cols, valid_feature_mask) if is_valid]
+        # 填充缺失值
+        df_work[feature_cols] = df_work[feature_cols].fillna(0)
         
-        variance_time = time.time() - variance_start
-        if zero_var_count > 0:
-            self.logger.info(f"[PREP] 特征筛选: 移除{zero_var_count}个零方差特征, 耗时{variance_time:.2f}s")
+        # 4. 转换数据类型
+        X = df_work[feature_cols].values.astype(np.float32)
+        groups = df_work['ranker_id'].values
         
-        feature_time = time.time() - feature_start
-        self.logger.info(f"[PREP] 特征选择完成: 保留{len(feature_cols)}个特征, 耗时{feature_time:.2f}s")
-        
-        # 4. 数据提取和类型转换
-        extract_start = time.time()
-        
-        df_features = df[feature_cols].fillna(0)
-        X = df_features.values.astype(np.float32)
-        y = df[target_col].values.astype(np.float32) if target_col in df.columns else np.zeros(len(df), dtype=np.float32)
-        groups = df['ranker_id'].values
-        
-        extract_time = time.time() - extract_start
-        self.logger.info(f"[PREP] 数据提取完成: 耗时{extract_time:.2f}s")
+        if is_test_data:
+            # 测试数据：创建虚拟的y数组
+            y = np.zeros(len(df_work), dtype=np.float32)
+            self.logger.info(f"[PREP] 测试数据处理完成: shape={X.shape}")
+        else:
+            # 训练数据：使用真实的目标值
+            y = df_work[target_col].values.astype(np.float32)
+            self.logger.info(f"[PREP] 训练数据处理完成: shape={X.shape}")
         
         self.feature_names = feature_cols
-        total_time = time.time() - prep_start
-        self.logger.info(f"[PREP] 数据预处理完成: 输出shape={X.shape}, 总耗时{total_time:.2f}s")
         
-        return X, y, groups, feature_cols, df
+        prep_time = time.time() - start_time
+        self.logger.info(f"[PREP] 数据预处理完成: 耗时={prep_time:.2f}s")
+        
+        return X, y, groups, feature_cols, df_work
     
-    def train_models(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray,
-                    model_names: List[str] = None, **training_kwargs) -> Dict:
-        """训练模型"""
-        if model_names is None:
-            model_names = list(self.models.keys())
+    def train_models_simple(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray,
+                           model_names: List[str], model_configs: Dict = None) -> Dict:
+        """简化的模型训练"""
+        if model_configs is None:
+            model_configs = {}
         
         trained_models = {}
-        total_start = time.time()
         
-        self.logger.info(f"[TRAIN] 开始模型训练: {len(model_names)}个模型")
-        
-        for i, name in enumerate(model_names, 1):
-            if name not in self.models:
-                self.logger.warning(f"[TRAIN] 跳过不存在的模型: {name}")
-                continue
-            
+        for model_name in model_names:
             try:
-                self.logger.info(f"[TRAIN] 训练 {i}/{len(model_names)}: {name}")
+                self.logger.info(f"[TRAIN] 训练模型: {model_name}")
                 train_start = time.time()
                 
-                model = self.models[name]
+                # 获取模型参数
+                model_params = model_configs.get(model_name, {})
                 
-                # 根据模型类型选择训练参数
-                if name in self.pytorch_models:
-                    epochs = training_kwargs.get('epochs', 50)
-                    batch_size = training_kwargs.get('batch_size', 1024)
-                    model.fit(X, y, groups, epochs=epochs, batch_size=batch_size)
+                # 直接创建模型 - 避免工厂模式开销
+                if model_name in ['RankNet', 'NeuralRanker', 'TransformerRanker']:
+                    model = create_model_fast(
+                        model_name, 
+                        use_gpu=self.use_gpu,
+                        input_dim=X.shape[1],
+                        **model_params
+                    )
                 else:
-                    model.fit(X, y, groups)
+                    model = create_model_fast(
+                        model_name, 
+                        use_gpu=self.use_gpu,
+                        **model_params
+                    )
                 
-                trained_models[name] = model
+                # 训练模型
+                model.fit(X, y, groups)
+                trained_models[model_name] = model
+                
                 train_time = time.time() - train_start
-                self.logger.info(f"[TRAIN] {name} 训练完成: {train_time:.2f}s")
+                self.logger.info(f"[TRAIN] {model_name} 完成: {train_time:.2f}s")
+                
+                # 清理GPU内存
+                if self.use_gpu:
+                    try:
+                        import torch
+                        torch.cuda.empty_cache()
+                    except ImportError:
+                        pass
                 
             except Exception as e:
                 train_time = time.time() - train_start if 'train_start' in locals() else 0
-                self.logger.error(f"[TRAIN] {name} 训练失败: {e} ({train_time:.2f}s)")
+                self.logger.error(f"[TRAIN] {model_name} 失败: {e} ({train_time:.2f}s)")
                 continue
         
-        total_time = time.time() - total_start
-        self.logger.info(f"[TRAIN] 模型训练完成: {len(trained_models)}/{len(model_names)} 成功, 总耗时{total_time:.2f}s")
-        
+        self.trained_models.update(trained_models)
         return trained_models
     
-    def predict_model(self, X: np.ndarray, validation_scores: Dict[str, float] = None, 
-                    model_names: List[str] = None) -> np.ndarray:
-        """基于验证得分的加权预测"""
-        predict_start = time.time()
-        
+    def predict_simple(self, X: np.ndarray, model_names: List[str] = None) -> np.ndarray:
+        """简化的预测 - 使用第一个可用模型或平均预测"""
         if model_names is None:
-            model_names = list(self.models.keys())
+            model_names = list(self.trained_models.keys())
         
-        # 过滤可用模型
-        available_models = []
-        available_scores = {}
-        
-        for name in model_names:
-            if name in self.models and hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted:
-                available_models.append(name)
-                available_scores[name] = validation_scores.get(name, 1.0) if validation_scores else 1.0
+        available_models = [name for name in model_names if name in self.trained_models]
         
         if not available_models:
             raise ValueError("没有可用的已训练模型")
         
-        self.logger.info(f"[PREDICT] 开始集成预测: {len(available_models)}个模型")
+        self.logger.info(f"[PREDICT] 使用模型: {available_models}")
         
-        # 计算权重
-        if validation_scores:
-            weights = self._calculate_performance_weights(available_scores)
-            self.logger.info(f"[PREDICT] 使用验证得分权重: {dict(zip(available_models, [f'{w:.3f}' for w in weights]))}")
-        else:
-            weights = [1.0 / len(available_models)] * len(available_models)
-            self.logger.info("[PREDICT] 使用等权重")
-        
-        # 收集预测结果
         predictions = []
-        valid_weights = []
-        
-        for i, model_name in enumerate(available_models):
+        for model_name in available_models:
             try:
-                model_pred_start = time.time()
-                model = self.models[model_name]
+                model = self.trained_models[model_name]
                 pred = model.predict(X)
                 predictions.append(pred)
-                valid_weights.append(weights[i])
-                
-                model_pred_time = time.time() - model_pred_start
-                self.logger.info(f"[PREDICT] {model_name} 预测完成: 权重{weights[i]:.3f}, 耗时{model_pred_time:.2f}s")
+                self.logger.info(f"[PREDICT] {model_name} 预测完成: shape={pred.shape}")
             except Exception as e:
                 self.logger.warning(f"[PREDICT] {model_name} 预测失败: {e}")
                 continue
@@ -278,153 +179,175 @@ class FlightRankingModelsManager:
         if not predictions:
             raise ValueError("所有模型预测都失败")
         
-        # 加权平均
-        predictions = np.array(predictions)
-        valid_weights = np.array(valid_weights)
-        valid_weights = valid_weights / np.sum(valid_weights)
-        
-        final_predictions = np.average(predictions, axis=0, weights=valid_weights)
-        
-        total_time = time.time() - predict_start
-        self.logger.info(f"[PREDICT] 集成预测完成: {len(predictions)}个模型, 耗时{total_time:.2f}s")
-        
-        return final_predictions
-
-    def _calculate_performance_weights(self, scores: Dict[str, float], 
-                                    weight_strategy: str = 'softmax') -> List[float]:
-        """基于验证得分计算模型权重"""
-        if not scores:
-            return []
-        
-        score_array = np.array(list(scores.values()))
-        
-        if weight_strategy == 'softmax':
-            scaled_scores = (score_array - np.min(score_array)) * 10
-            exp_scores = np.exp(scaled_scores - np.max(scaled_scores))
-            weights = exp_scores / np.sum(exp_scores)
-            
-        elif weight_strategy == 'linear':
-            min_score = np.min(score_array)
-            max_score = np.max(score_array)
-            if max_score == min_score:
-                weights = np.ones(len(score_array)) / len(score_array)
-            else:
-                normalized_scores = (score_array - min_score) / (max_score - min_score)
-                weights = 0.1 + 0.9 * normalized_scores
-                weights = weights / np.sum(weights)
-                
+        # 简单平均或使用单个模型结果
+        if len(predictions) == 1:
+            final_prediction = predictions[0]
         else:
-            weights = np.ones(len(score_array)) / len(score_array)
+            final_prediction = np.mean(predictions, axis=0)
+            self.logger.info(f"[PREDICT] 使用 {len(predictions)} 个模型的平均预测")
         
-        return weights.tolist()
-
-    def get_best_model_name(self, validation_scores: Dict[str, float] = None) -> Optional[str]:
-        """获取最佳模型名称"""
-        if not validation_scores:
-            return None
-        
-        best_model = max(validation_scores.items(), key=lambda x: x[1])
-        self.logger.info(f"[BEST] 最佳模型: {best_model[0]} (NDCG@10={best_model[1]:.4f})")
-        
-        return best_model[0]
-
-    def predict_with_best_model(self, X: np.ndarray, validation_scores: Dict[str, float] = None) -> np.ndarray:
-        """使用最佳模型预测"""
-        best_model_name = self.get_best_model_name(validation_scores)
-        
-        if best_model_name is None or best_model_name not in self.models:
-            available_models = [name for name in self.models.keys() 
-                            if hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted]
-            if not available_models:
-                raise ValueError("没有可用的已训练模型")
-            best_model_name = available_models[0]
-            self.logger.info(f"[BEST] 使用第一个可用模型: {best_model_name}")
-        else:
-            self.logger.info(f"[BEST] 使用最佳模型: {best_model_name}")
-        
-        return self.models[best_model_name].predict(X)
+        return final_prediction
     
-    def save_models(self, save_dir: str):
-        """保存模型"""
-        self.logger.info(f"[SAVE] 开始保存模型到: {save_dir}")
+    def save_models_simple(self, save_dir: str):
+        """简化的模型保存"""
         os.makedirs(save_dir, exist_ok=True)
-        saved_count = 0
-        save_start = time.time()
         
-        for name, model in self.models.items():
-            if hasattr(model, 'is_fitted') and model.is_fitted:
+        import joblib
+        
+        for name, model in self.trained_models.items():
+            try:
                 filepath = os.path.join(save_dir, f"{name}.pkl")
-                try:
-                    model_save_start = time.time()
-                    model.save_model(filepath)
-                    model_save_time = time.time() - model_save_start
-                    saved_count += 1
-                    self.logger.info(f"[SAVE] {name} 保存完成: {model_save_time:.2f}s")
-                except Exception as e:
-                    self.logger.error(f"[SAVE] {name} 保存失败: {e}")
+                model.save_model(filepath)
+                self.logger.info(f"[SAVE] {name} 保存完成")
+            except Exception as e:
+                self.logger.error(f"[SAVE] {name} 保存失败: {e}")
         
-        # 保存元数据
+        # 保存特征名称
         if self.feature_names:
             joblib.dump(self.feature_names, os.path.join(save_dir, "features.pkl"))
-        joblib.dump(self._model_configs, os.path.join(save_dir, "model_configs.pkl"))
-        
-        save_time = time.time() - save_start
-        self.logger.info(f"[SAVE] 模型保存完成: {saved_count}个模型, 耗时{save_time:.2f}s")
     
-    def load_models(self, save_dir: str, model_names: List[str] = None):
-        """加载模型"""
+    def load_models_simple(self, save_dir: str, model_names: List[str] = None):
+        """简化的模型加载"""
+        import joblib
+        
         if not os.path.exists(save_dir):
             raise FileNotFoundError(f"模型目录不存在: {save_dir}")
         
-        self.logger.info(f"[LOAD] 开始加载模型: {save_dir}")
-        load_start = time.time()
-        
         if model_names is None:
             model_files = [f for f in os.listdir(save_dir) 
-                          if f.endswith('.pkl') and f not in ['features.pkl', 'model_configs.pkl']]
+                          if f.endswith('.pkl') and f != 'features.pkl']
             model_names = [f.replace('.pkl', '') for f in model_files]
         
         loaded_count = 0
         for name in model_names:
             filepath = os.path.join(save_dir, f"{name}.pkl")
-            if os.path.exists(filepath) and name in self.model_classes:
+            if os.path.exists(filepath):
                 try:
-                    model_load_start = time.time()
-                    self.models[name] = self.model_classes[name].load_model(filepath)
-                    model_load_time = time.time() - model_load_start
+                    model = joblib.load(filepath)
+                    self.trained_models[name] = model
                     loaded_count += 1
-                    self.logger.info(f"[LOAD] {name} 加载完成: {model_load_time:.2f}s")
+                    self.logger.info(f"[LOAD] {name} 加载完成")
                 except Exception as e:
                     self.logger.warning(f"[LOAD] {name} 加载失败: {e}")
         
-        # 加载元数据
+        # 加载特征名称
         features_path = os.path.join(save_dir, "features.pkl")
         if os.path.exists(features_path):
-            self.feature_names = joblib.load(features_path)
+            try:
+                self.feature_names = joblib.load(features_path)
+                self.logger.info(f"[LOAD] 特征名称加载完成: {len(self.feature_names)} 个特征")
+            except Exception as e:
+                self.logger.warning(f"[LOAD] 特征名称加载失败: {e}")
         
-        config_path = os.path.join(save_dir, "model_configs.pkl")
-        if os.path.exists(config_path):
-            self._model_configs = joblib.load(config_path)
-        
-        load_time = time.time() - load_start
-        self.logger.info(f"[LOAD] 模型加载完成: {loaded_count}个模型, 耗时{load_time:.2f}s")
         return loaded_count > 0
+
+
+def calculate_hit_rate_fast(y_true: np.ndarray, y_pred: np.ndarray, 
+                           groups: np.ndarray, k: int = 3) -> float:
+    """快速计算HitRate@K"""
+    unique_groups = np.unique(groups)
+    hits = 0
+    total_groups = 0
     
-    def get_model_summary(self) -> Dict:
-        """获取模型概要信息"""
-        fitted_models = []
-        unfitted_models = []
+    for group in unique_groups:
+        group_mask = groups == group
+        group_y_true = y_true[group_mask]
+        group_scores = y_pred[group_mask]
         
-        for name, model in self.models.items():
-            if hasattr(model, 'is_fitted') and model.is_fitted:
-                fitted_models.append(name)
-            else:
-                unfitted_models.append(name)
+        true_selected_indices = np.where(group_y_true == 1)[0]
+        if len(true_selected_indices) > 0:
+            sorted_indices = np.argsort(group_scores)[::-1]
+            top_k_indices = sorted_indices[:k]
+            if any(idx in top_k_indices for idx in true_selected_indices):
+                hits += 1
+            total_groups += 1
+    
+    return hits / total_groups if total_groups > 0 else 0
+
+
+def evaluate_models_fast(models: Dict, X_test: np.ndarray, y_test: np.ndarray, 
+                        groups_test: np.ndarray) -> pd.DataFrame:
+    """快速模型评估"""
+    results = []
+    
+    for model_name, model in models.items():
+        try:
+            y_pred = model.predict(X_test)
+            hit_rate = calculate_hit_rate_fast(y_test, y_pred, groups_test, k=3)
+            
+            results.append({
+                'Model': model_name,
+                'HitRate@3': f'{hit_rate:.4f}'
+            })
+            
+        except Exception as e:
+            print(f"评估{model_name}失败: {e}")
+            continue
+    
+    return pd.DataFrame(results)
+
+
+# 快速分析器类
+class FastFlightRankingAnalyzer:
+    """快速航班排序分析器 - 简化版本"""
+    
+    def __init__(self, use_gpu: bool = True, selected_models: List[str] = None):
+        self.use_gpu = use_gpu
+        self.selected_models = selected_models or ['XGBRanker', 'LGBMRanker']
+        self.manager = FlightRankingModelsManager(use_gpu=use_gpu)
+        self.trained_models = {}
+    
+    def analyze_segment(self, train_file_path: str, use_sampling: bool = True,
+                       num_groups: int = 2000, min_group_size: int = 20) -> Dict:
+        """分析单个数据段 - 高效版本"""
+        
+        # 1. 加载数据
+        df = self.load_and_sample_data(train_file_path, use_sampling, num_groups, min_group_size)
+        
+        # 2. 准备数据
+        X, y, groups, feature_cols, _ = self.manager.prepare_data_simple(df)
+        
+        # 3. 数据划分
+        from sklearn.model_selection import train_test_split
+        unique_groups = np.unique(groups)
+        train_groups, test_groups = train_test_split(unique_groups, test_size=0.2, random_state=42)
+        
+        train_mask = np.isin(groups, train_groups)
+        test_mask = np.isin(groups, test_groups)
+        
+        X_train, X_test = X[train_mask], X[test_mask]
+        y_train, y_test = y[train_mask], y[test_mask]
+        groups_test = groups[test_mask]
+        
+        # 4. 训练模型
+        trained_models = self.manager.train_models_simple(X_train, y_train, groups[train_mask], self.selected_models)
+        
+        # 5. 评估模型
+        results_df = evaluate_models_fast(trained_models, X_test, y_test, groups_test)
+        
+        self.trained_models.update(trained_models)
         
         return {
-            'total_models': len(self.models),
-            'fitted_models': fitted_models,
-            'unfitted_models': unfitted_models,
-            'feature_count': len(self.feature_names),
-            'gpu_enabled': self.use_gpu
+            'model_results': results_df,
+            'trained_models': trained_models,
+            'feature_names': feature_cols
         }
+    
+    def load_and_sample_data(self, file_path: str, use_sampling: bool, num_groups: int, min_group_size: int) -> pd.DataFrame:
+        """加载和采样数据"""
+        df = pd.read_parquet(file_path)
+        
+        if use_sampling:
+            group_counts = df['ranker_id'].value_counts()
+            valid_groups = group_counts[group_counts >= min_group_size].index
+            
+            if len(valid_groups) > num_groups:
+                np.random.seed(42)
+                selected_groups = np.random.choice(valid_groups, size=num_groups, replace=False)
+                df = df[df['ranker_id'].isin(selected_groups)]
+        
+        return df
+    
+    def save_models(self, save_dir: str):
+        """保存训练的模型"""
+        self.manager.save_models_simple(save_dir)
