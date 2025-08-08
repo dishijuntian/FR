@@ -1,0 +1,47 @@
+# PyTorch版本的依赖包列表
+
+# 深度学习框架 - PyTorch替代TensorFlow
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# 机器学习核心库
+numpy>=1.20.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+
+# 排序模型相关
+xgboost>=1.6.0
+lightgbm>=3.3.0
+rank-bm25>=0.2.2
+
+# 可解释性分析
+shap>=0.41.0
+
+# 超参数优化
+optuna>=3.0.0
+
+# 数据处理
+pyarrow>=8.0.0
+
+# 可视化
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# 工具库
+tqdm>=4.62.0
+joblib>=1.1.0
+psutil>=5.8.0
+
+# 可选的进度条美化
+rich>=12.0.0
+
+# 开发和调试工具
+jupyter>=1.0.0
+ipython>=7.0.0
+
+# 注释:
+# - 移除了tensorflow相关包
+# - 添加了torch, torchvision, torchaudio
+# - 保持了其他所有依赖包
+# - torch版本要求>=2.0.0以确保兼容性
