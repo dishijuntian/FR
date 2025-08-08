@@ -17,7 +17,7 @@ data_processing:
   force_segment: false
   force_feature: true
   verify_results: true
-  force_reprocess: true
+  force_reprocess: false
   
   # 特征工程配置
   feature_engineering:
@@ -121,13 +121,11 @@ training:
 # 自动数据集划分策略
 auto_split_strategy:
   thresholds:
-    1000: 2   # ≤1000个ranker: 2折
+    1000: 3   # ≤1000个ranker: 2折
     2000: 3   # ≤2000个ranker: 3折  
-    5000: 5   # ≤5000个ranker: 5折
-    10000: 10  # ≤10000个ranker: 8折
-    15000: 15
-    20000: 20
-    99999999: 100 # >10000个ranker: 10折
+    5000: 3   # ≤5000个ranker: 5折
+    10000: 3  # ≤10000个ranker: 8折
+    99999999: 3 # >10000个ranker: 10折
 
 # 验证集大小调整策略  
 validation_size_strategy:
@@ -232,7 +230,7 @@ monitoring:
 
 # 流水线配置
 pipeline:
-  run_data_processing: true
+  run_data_processing: false
   run_training: true
   run_prediction: true
   

@@ -1,5 +1,5 @@
 """
-航班排名预测器
+智能预测器
 """
 
 import os
@@ -9,7 +9,6 @@ import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import json
-import pickle
 
 import numpy as np
 import pandas as pd
@@ -20,7 +19,7 @@ warnings.filterwarnings('ignore')
 
 
 class FlightRankingPredictor:
-    """航班排名预测器"""
+    """智能预测器"""
     
     def __init__(self, config: Dict, logger=None):
         """
@@ -41,15 +40,16 @@ class FlightRankingPredictor:
         # 预测配置
         prediction_config = config['prediction']
         self.segments = prediction_config['segments']
-        self.model_names = prediction_config['model_names']
         self.use_gpu = prediction_config['use_gpu']
-        self.enable_business_rules = prediction_config['enable_business_rules']
-        self.ensemble_weights = prediction_config.get('ensemble_weights', {})
+        
+        # 加载最佳模型配置
+        self.best_models_config = self._load_best_models_config()
         
         # 确保输出目录存在
         self.output_path.mkdir(parents=True, exist_ok=True)
         
-        self.logger.info("预测器初始化完成")
+        self.logger.info("智能预测器初始化完成")
+        self.logger.info(f"最佳模型配置: {self.best_models_config}")
     
     def _setup_logger(self) -> logging.Logger:
         """设置日志"""
@@ -64,34 +64,72 @@ class FlightRankingPredictor:
             logger.setLevel(logging.INFO)
         return logger
     
-    def load_segment_models(self, segment_id: int) -> Dict:
-        """加载数据段的模型"""
+    def _load_best_models_config(self) -> Dict:
+        """加载最佳模型配置"""
+        config_path = self.model_save_path / "best_models_config.json"
+        
+        if not config_path.exists():
+            self.logger.warning("最佳模型配置文件不存在，将尝试从训练报告中推断")
+            return self._infer_best_models_from_reports()
+        
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        
+        self.logger.info(f"加载最佳模型配置: {config}")
+        return config
+    
+    def _infer_best_models_from_reports(self) -> Dict:
+        """从训练报告中推断最佳模型"""
+        best_models = {}
+        
+        for segment_id in self.segments:
+            report_path = self.model_save_path / f"segment_{segment_id}" / "training_report.json"
+            
+            if report_path.exists():
+                try:
+                    with open(report_path, 'r') as f:
+                        report = json.load(f)
+                    
+                    best_model = report.get('best_model_name')
+                    if best_model:
+                        best_models[str(segment_id)] = best_model
+                        self.logger.info(f"推断 segment_{segment_id} 最佳模型: {best_model}")
+                
+                except Exception as e:
+                    self.logger.warning(f"读取 segment_{segment_id} 训练报告失败: {e}")
+        
+        return best_models
+    
+    def load_segment_best_model(self, segment_id: int) -> Tuple[FlightRankingModelsManager, str]:
+        """加载数据段的最佳模型"""
         segment_dir = self.model_save_path / f"segment_{segment_id}"
         
         if not segment_dir.exists():
             raise FileNotFoundError(f"段模型目录不存在: {segment_dir}")
         
+        # 获取最佳模型名称
+        best_model_name = self.best_models_config.get(str(segment_id))
+        if not best_model_name:
+            raise ValueError(f"未找到 segment_{segment_id} 的最佳模型配置")
+        
+        # 检查模型文件是否存在
+        model_file = segment_dir / f"{best_model_name}.pkl"
+        if not model_file.exists():
+            raise FileNotFoundError(f"最佳模型文件不存在: {model_file}")
+        
+        # 加载模型
         models_manager = FlightRankingModelsManager(use_gpu=self.use_gpu, logger=self.logger)
-        models_manager.load_models(str(segment_dir), self.model_names)
+        success = models_manager.load_model(best_model_name, str(segment_dir))
         
-        if not models_manager.models:
-            raise ValueError(f"没有成功加载 segment_{segment_id} 的模型")
+        if not success:
+            raise ValueError(f"加载 segment_{segment_id} 最佳模型 {best_model_name} 失败")
         
-        self.logger.info(f"成功加载 {len(models_manager.models)} 个模型")
-        return models_manager
-    
-    def load_segment_features(self, segment_id: int) -> List[str]:
-        """加载数据段的特征名称"""
-        feature_path = self.model_save_path / f"segment_{segment_id}" / "features.pkl"
+        # 验证模型
+        if not models_manager.validate_model(best_model_name):
+            raise ValueError(f"segment_{segment_id} 最佳模型 {best_model_name} 验证失败")
         
-        if not feature_path.exists():
-            raise FileNotFoundError(f"特征文件不存在: {feature_path}")
-        
-        with open(feature_path, 'rb') as f:
-            features = pickle.load(f)
-        
-        self.logger.info(f"加载特征: {len(features)} 个")
-        return features
+        self.logger.info(f"成功加载 segment_{segment_id} 最佳模型: {best_model_name}")
+        return models_manager, best_model_name
     
     def generate_rankings(self, scores: np.ndarray, groups: np.ndarray) -> np.ndarray:
         """根据分数生成排名"""
@@ -113,7 +151,7 @@ class FlightRankingPredictor:
         return rankings
     
     def validate_rankings(self, rankings: np.ndarray, groups: np.ndarray) -> bool:
-        """验证排名的有效性"""
+        """简单验证排名的有效性"""
         unique_groups = np.unique(groups)
         
         for group_id in unique_groups:
@@ -125,30 +163,9 @@ class FlightRankingPredictor:
             actual_rankings = set(group_rankings)
             
             if expected_rankings != actual_rankings:
-                self.logger.error(f"组 {group_id} 排名无效")
                 return False
         
         return True
-    
-    def apply_business_rules(self, scores: np.ndarray, features: pd.DataFrame) -> np.ndarray:
-        """应用业务规则调整分数"""
-        if not self.enable_business_rules:
-            return scores
-        
-        adjusted_scores = scores.copy()
-        
-        # 示例业务规则
-        if 'total_price' in features.columns:
-            high_price_mask = features['total_price'] > features['total_price'].quantile(0.9)
-            adjusted_scores[high_price_mask] *= 0.9
-        
-        if 'departure_hour' in features.columns:
-            early_mask = features['departure_hour'] < 6
-            late_mask = features['departure_hour'] > 22
-            adjusted_scores[early_mask | late_mask] *= 0.95
-        
-        self.logger.info("业务规则调整完成")
-        return adjusted_scores
     
     def predict_segment(self, segment_id: int, save_individual: bool = False) -> pd.DataFrame:
         """预测单个数据段"""
@@ -161,27 +178,23 @@ class FlightRankingPredictor:
             raise FileNotFoundError(f"测试文件不存在: {test_file}")
         
         df = pd.read_parquet(test_file)
-        self.logger.info(f"加载测试数据: {df.shape}")
         
-        # 加载模型
-        models_manager = self.load_segment_models(segment_id)
+        # 加载最佳模型
+        models_manager, best_model_name = self.load_segment_best_model(segment_id)
         
         # 数据预处理
-        X, _, groups, _, processed_df = models_manager.prepare_data(df, target_col='selected')
+        X, _, groups, _, _ = models_manager.prepare_data(df, target_col='selected')
         
-        # 获取权重
-        weights = []
-        available_models = []
-        for model_name in self.model_names:
-            if model_name in models_manager.models:
-                available_models.append(model_name)
-                weights.append(self.ensemble_weights.get(model_name, 1.0))
-        
-        # 集成预测
-        predictions = models_manager.predict_ensemble(X, available_models, weights)
-        
-        # 应用业务规则
-        # predictions = self.apply_business_rules(predictions, processed_df)
+        # 模型预测
+        try:
+            if best_model_name in ['GraphRanker', 'TransformerRanker']:
+                predictions = models_manager.predict_model(best_model_name, X, groups)
+            else:
+                predictions = models_manager.predict_model(best_model_name, X)
+            
+        except Exception as e:
+            self.logger.error(f"✗ {best_model_name} 预测失败: {e}")
+            raise
         
         # 生成排名
         rankings = self.generate_rankings(predictions, groups)
@@ -194,31 +207,47 @@ class FlightRankingPredictor:
         results = df[['Id', 'ranker_id']].copy()
         results['selected'] = rankings
         
-        # 保存结果
         prediction_time = time.time() - start_time
         
         if save_individual:
             output_file = self.output_path / f"predictions_segment_{segment_id}.csv"
             results.to_csv(output_file, index=False)
-            self.logger.info(f"✓ 保存到: {output_file}")
         
-        self.logger.info(f"✓ segment_{segment_id} 预测完成 (时间: {prediction_time:.1f}s)")
+        self.logger.info(f"✓ segment_{segment_id} 预测完成 (模型: {best_model_name}, 时间: {prediction_time:.1f}s)")
         
-        return results
+        return results, best_model_name, prediction_time
     
     def predict_all_segments(self) -> pd.DataFrame:
         """预测所有数据段"""
         self.logger.info(f"开始预测所有段: {self.segments}")
         
         all_results = []
+        prediction_summary = {}
         total_start_time = time.time()
+        successful_predictions = 0
+        failed_predictions = 0
         
         for segment_id in self.segments:
             try:
-                result = self.predict_segment(segment_id, save_individual=True)
+                result, best_model_name, prediction_time = self.predict_segment(segment_id, save_individual=True)
                 all_results.append(result)
+                successful_predictions += 1
+                
+                prediction_summary[f'segment_{segment_id}'] = {
+                    'best_model': best_model_name,
+                    'prediction_time': prediction_time,
+                    'samples_count': len(result),
+                    'rankers_count': result['ranker_id'].nunique(),
+                    'status': 'success'
+                }
+                
             except Exception as e:
                 self.logger.error(f"✗ segment_{segment_id} 预测失败: {e}")
+                failed_predictions += 1
+                prediction_summary[f'segment_{segment_id}'] = {
+                    'status': 'failed',
+                    'error': str(e)
+                }
                 continue
         
         if not all_results:
@@ -234,42 +263,105 @@ class FlightRankingPredictor:
         final_submission.to_csv(output_file, index=False)
         
         # 生成预测报告
-        self._generate_prediction_report(final_submission, total_time)
+        self._generate_prediction_report(
+            final_submission, prediction_summary, total_time, 
+            successful_predictions, failed_predictions
+        )
         
         self.logger.info(f"✓ 所有预测完成 (总时间: {total_time:.1f}s)")
         self.logger.info(f"✓ 最终结果: {output_file}")
-        self.logger.info(f"✓ 总记录数: {len(final_submission)}")
+        self.logger.info(f"✓ 总记录数: {len(final_submission):,}")
+        self.logger.info(f"✓ 成功预测段数: {successful_predictions}/{len(self.segments)}")
         
         return final_submission
     
-    def _generate_prediction_report(self, results: pd.DataFrame, total_time: float):
+    def _generate_prediction_report(self, results: pd.DataFrame, prediction_summary: Dict,
+                                   total_time: float, successful_predictions: int, 
+                                   failed_predictions: int):
         """生成预测报告"""
-        # 计算统计数据并转换为Python原生类型
+        total_segments = successful_predictions + failed_predictions
+        
+        # 统计使用的模型分布
+        model_usage = {}
+        for segment_info in prediction_summary.values():
+            if segment_info['status'] == 'success':
+                model_name = segment_info['best_model']
+                model_usage[model_name] = model_usage.get(model_name, 0) + 1
+        
+        # 计算基础统计
         total_samples = len(results)
-        ranker_count = int(results['ranker_id'].nunique())  # 转换为int
+        total_rankers = int(results['ranker_id'].nunique())
         group_sizes = results.groupby('ranker_id').size()
         
         report = {
             'prediction_summary': {
-                'segments': self.segments,
-                'total_samples': total_samples,  # 已经是Python int
-                'total_time': total_time,        # float类型可序列化
-                'avg_time_per_sample': total_time / total_samples * 1000,
-                'models_used': self.model_names,
-                # 确保权重是原生Python类型
-                'ensemble_weights': [float(w) for w in self.ensemble_weights] 
+                'total_segments': total_segments,
+                'successful_segments': successful_predictions,
+                'failed_segments': failed_predictions,
+                'success_rate': successful_predictions / total_segments if total_segments > 0 else 0,
+                'total_time': total_time,
+                'avg_time_per_segment': total_time / successful_predictions if successful_predictions > 0 else 0
             },
             'data_statistics': {
-                'total_rankers': ranker_count,
-                'avg_options_per_ranker': total_samples / ranker_count,
-                'min_options': int(group_sizes.min()),  # 转换为int
-                'max_options': int(group_sizes.max())   # 转换为int
-            }
+                'total_samples': total_samples,
+                'total_rankers': total_rankers,
+                'avg_options_per_ranker': total_samples / total_rankers if total_rankers > 0 else 0,
+                'min_options': int(group_sizes.min()) if len(group_sizes) > 0 else 0,
+                'max_options': int(group_sizes.max()) if len(group_sizes) > 0 else 0
+            },
+            'model_usage': model_usage,
+            'segment_details': prediction_summary,
+            'best_models_config': self.best_models_config
         }
         
         # 保存报告
-        report_path = self.output_path / "prediction_report.json"
+        report_path = self.output_path / "intelligent_prediction_report.json"
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2)
         
-        self.logger.info(f"预测报告已保存: {report_path}")
+        # 打印总结
+        self.logger.info(f"\n预测总结:")
+        self.logger.info(f"  - 成功率: {report['prediction_summary']['success_rate']:.1%}")
+        self.logger.info(f"  - 总样本数: {total_samples:,}")
+        self.logger.info(f"  - Ranker数: {total_rankers:,}")
+        
+        if model_usage:
+            self.logger.info(f"\n使用的模型分布:")
+            for model_name, count in sorted(model_usage.items(), key=lambda x: x[1], reverse=True):
+                self.logger.info(f"  - {model_name}: {count} 段")
+        
+        self.logger.info(f"\n详细报告已保存: {report_path}")
+    
+    def get_prediction_status(self) -> Dict:
+        """获取预测状态信息"""
+        status = {
+            'target_segments': self.segments,
+            'best_models_config': self.best_models_config,
+            'available_models': {},
+            'completed_predictions': [],
+            'missing_models': []
+        }
+        
+        for segment_id in self.segments:
+            segment_dir = self.model_save_path / f"segment_{segment_id}"
+            best_model_name = self.best_models_config.get(str(segment_id))
+            
+            if best_model_name:
+                model_file = segment_dir / f"{best_model_name}.pkl"
+                prediction_file = self.output_path / f"predictions_segment_{segment_id}.csv"
+                
+                status['available_models'][segment_id] = {
+                    'model_name': best_model_name,
+                    'model_exists': model_file.exists(),
+                    'prediction_exists': prediction_file.exists()
+                }
+                
+                if model_file.exists():
+                    if prediction_file.exists():
+                        status['completed_predictions'].append(segment_id)
+                else:
+                    status['missing_models'].append(segment_id)
+            else:
+                status['missing_models'].append(segment_id)
+        
+        return status

@@ -1,5 +1,5 @@
 """
-航班排名模型集合管理器
+航班排名模型管理器
 """
 
 import os
@@ -11,13 +11,14 @@ import logging
 import warnings
 import joblib
 
+# from .Models import LightGBMRanker, XGBoostRanker, RankNet, GraphRanker, CNNRanker, TransformerRanker
 from .Models import LightGBMRanker, XGBoostRanker, RankNet
 
 warnings.filterwarnings('ignore')
 
 
 class FlightRankingModelsManager:
-    """优化后的航班排名模型管理器"""
+    """简化版航班排名模型管理器"""
     
     def __init__(self, use_gpu: bool = True, logger=None):
         self.use_gpu = use_gpu and torch.cuda.is_available()
@@ -31,14 +32,28 @@ class FlightRankingModelsManager:
         else:
             self.logger.info("使用CPU模式")
     
-    def create_models(self, input_dim: int, model_configs: Dict = None) -> Dict:
-        """创建模型 - 只在需要时创建，避免重复"""
+    def create_models(self, model_names: List[str], input_dim: int, model_configs: Dict = None) -> Dict[str, object]:
+        """批量创建多个模型实例"""
         if model_configs is None:
             model_configs = {}
         
-        # 保存配置以便后续使用
-        self._model_configs = model_configs
+        created_models = {}
+        for model_name in model_names:
+            model = self.create_model(model_name, input_dim, model_configs.get(model_name, {}))
+            if model is not None:
+                created_models[model_name] = model
         
+        return created_models
+    
+    def create_model(self, model_name: str, input_dim: int, model_config: Dict = None) -> object:
+        """创建单个模型实例"""
+        if model_config is None:
+            model_config = {}
+        
+        # 保存配置
+        self._model_configs[model_name] = model_config
+        
+        # 默认配置
         default_configs = {
             'XGBRanker': {
                 'n_estimators': 200, 
@@ -55,106 +70,88 @@ class FlightRankingModelsManager:
                 'hidden_dims': [128, 64, 32],
                 'learning_rate': 0.001,
                 'dropout_rate': 0.2
+            },
+            'GraphRanker': {
+                'input_dim': input_dim,
+                'hidden_dims': [64, 32],
+                'num_gnn_layers': 3,
+                'learning_rate': 0.001,
+                'dropout_rate': 0.2
+            },
+            'CNNRanker': {
+                'input_dim': input_dim,
+                'sequence_length': 10,
+                'conv_channels': [32, 64, 128],
+                'kernel_sizes': [3, 5, 7],
+                'hidden_dims': [128, 64],
+                'learning_rate': 0.001,
+                'dropout_rate': 0.2
+            },
+            'TransformerRanker': {
+                'input_dim': input_dim,
+                'd_model': 128,
+                'nhead': 8,
+                'num_layers': 3,
+                'dim_feedforward': 512,
+                'learning_rate': 0.001,
+                'dropout_rate': 0.1
             }
         }
         
         # 合并用户配置
-        for model_name in default_configs:
-            if model_name in model_configs:
-                default_configs[model_name].update(model_configs[model_name])
-        
-        created_models = {}
-        
-        # 创建模型实例
-        for model_name in ['XGBRanker', 'LGBMRanker']:
-            try:
-                if model_name == 'XGBRanker':
-                    created_models[model_name] = XGBoostRanker(
-                        use_gpu=self.use_gpu, 
-                        logger=self.logger,
-                        **default_configs[model_name]
-                    )
-                elif model_name == 'LGBMRanker':
-                    created_models[model_name] = LightGBMRanker(
-                        use_gpu=self.use_gpu,
-                        logger=self.logger,
-                        **default_configs[model_name]
-                    )
-                elif model_name == 'RankNet':
-                    created_models[model_name] = RankNet(
-                        use_gpu=self.use_gpu,
-                        logger=self.logger,
-                        **default_configs[model_name]
-                    )
-                
-                self.logger.info(f"✓ {model_name}模型创建成功")
-                
-            except Exception as e:
-                self.logger.warning(f"✗ {model_name}创建失败: {e}")
-                continue
-        
-        # 只更新成功创建的模型
-        self.models.update(created_models)
-        return created_models
-    
-    def create_single_model(self, model_name: str, input_dim: int, 
-                           model_configs: Dict = None) -> Optional[object]:
-        """创建单个模型实例（用于重新训练等场景）"""
-        if model_configs is None:
-            model_configs = self._model_configs
-        
-        default_configs = {
-            'XGBRanker': {
-                'n_estimators': 200, 
-                'max_depth': 8, 
-                'learning_rate': 0.05
-            },
-            'LGBMRanker': {
-                'n_estimators': 200, 
-                'max_depth': 8, 
-                'learning_rate': 0.05
-            },
-            'RankNet': {
-                'input_dim': input_dim, 
-                'hidden_dims': [128, 64, 32],
-                'learning_rate': 0.001,
-                'dropout_rate': 0.2
-            }
-        }
-        
-        # 合并配置
         config = default_configs.get(model_name, {})
-        if model_name in model_configs:
-            config.update(model_configs[model_name])
+        config.update(model_config)
         
         try:
             if model_name == 'XGBRanker':
-                return XGBoostRanker(
+                model = XGBoostRanker(
                     use_gpu=self.use_gpu, 
                     logger=self.logger,
                     **config
                 )
             elif model_name == 'LGBMRanker':
-                return LightGBMRanker(
+                model = LightGBMRanker(
                     use_gpu=self.use_gpu,
                     logger=self.logger,
                     **config
                 )
             elif model_name == 'RankNet':
-                return RankNet(
+                model = RankNet(
+                    use_gpu=self.use_gpu,
+                    logger=self.logger,
+                    **config
+                )
+            elif model_name == 'GraphRanker':
+                model = GraphRanker(
+                    use_gpu=self.use_gpu,
+                    logger=self.logger,
+                    **config
+                )
+            elif model_name == 'CNNRanker':
+                model = CNNRanker(
+                    use_gpu=self.use_gpu,
+                    logger=self.logger,
+                    **config
+                )
+            elif model_name == 'TransformerRanker':
+                model = TransformerRanker(
                     use_gpu=self.use_gpu,
                     logger=self.logger,
                     **config
                 )
             else:
                 raise ValueError(f"不支持的模型类型: {model_name}")
-                
+            
+            self.models[model_name] = model
+            self.logger.info(f"✓ {model_name}模型创建成功")
+            return model
+            
         except Exception as e:
-            self.logger.error(f"创建 {model_name} 失败: {e}")
+            self.logger.error(f"✗ {model_name}创建失败: {e}")
             return None
     
     def prepare_data(self, df: pd.DataFrame, target_col: str = 'selected') -> Tuple:
-        """数据预处理 - 优化内存使用"""
+        """数据预处理"""
         original_shape = df.shape
         
         # 数据清理 - 移除无效组
@@ -165,7 +162,7 @@ class FlightRankingModelsManager:
                 df = df[~df['ranker_id'].isin(invalid_groups)]
                 self.logger.info(f"移除 {len(invalid_groups)} 个无效组")
         
-        # 特征选择 - 更智能的特征筛选
+        # 特征选择
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         exclude_cols = ['Id', target_col, 'ranker_id', 'profileId', 'companyID']
         feature_cols = [col for col in numeric_cols if col not in exclude_cols]
@@ -177,10 +174,8 @@ class FlightRankingModelsManager:
             feature_cols = [col for col in feature_cols if col not in zero_var_cols]
             self.logger.info(f"移除 {len(zero_var_cols)} 个零方差特征")
         
-        # 处理缺失值 - 使用更快的方法
+        # 处理缺失值
         df_features = df[feature_cols].copy()
-        
-        # 批量填充缺失值
         numeric_medians = df_features.median()
         df_features = df_features.fillna(numeric_medians)
         
@@ -196,82 +191,61 @@ class FlightRankingModelsManager:
         
         return X, y, groups, feature_cols, df
     
-    def train_models(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray,
-                    model_names: List[str] = None, **training_kwargs) -> Dict:
-        """训练模型 - 避免重复训练"""
-        if model_names is None:
-            model_names = list(self.models.keys())
+    def train_model(self, model_name: str, X: np.ndarray, y: np.ndarray, 
+                   groups: np.ndarray, **training_kwargs) -> bool:
+        """训练单个模型"""
+        if model_name not in self.models:
+            self.logger.warning(f"模型 {model_name} 不存在")
+            return False
         
-        trained_models = {}
-        
-        for name in model_names:
-            if name not in self.models:
-                self.logger.warning(f"模型 {name} 不存在，跳过")
-                continue
+        try:
+            self.logger.info(f"开始训练 {model_name}...")
+            model = self.models[model_name]
             
-            try:
-                self.logger.info(f"开始训练 {name}...")
-                model = self.models[name]
-                
-                # 根据模型类型选择训练参数
-                if name == 'RankNet':
-                    epochs = training_kwargs.get('epochs', 50)
+            # 根据模型类型选择训练参数
+            if model_name in ['RankNet', 'GraphRanker', 'CNNRanker', 'TransformerRanker']:
+                epochs = training_kwargs.get('epochs', 100)
+                if model_name in ['GraphRanker', 'TransformerRanker']:
+                    # 这些模型需要groups参数进行预测
                     model.fit(X, y, groups, epochs=epochs)
                 else:
-                    model.fit(X, y, groups)
-                
-                trained_models[name] = model
-                self.logger.info(f"✓ {name} 训练完成")
-                
-            except Exception as e:
-                self.logger.error(f"✗ {name} 训练失败: {e}")
-                continue
-        
-        return trained_models
+                    model.fit(X, y, groups, epochs=epochs)
+            else:
+                # XGBoost和LightGBM
+                model.fit(X, y, groups)
+            
+            self.logger.info(f"✓ {model_name} 训练完成")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"✗ {model_name} 训练失败: {e}")
+            return False
     
-    def predict_ensemble(self, X: np.ndarray, model_names: List[str] = None,
-                        weights: List[float] = None) -> np.ndarray:
-        """集成预测 - 优化性能"""
-        if model_names is None:
-            model_names = [name for name, model in self.models.items() 
-                          if hasattr(model, 'is_fitted') and model.is_fitted]
+    def predict_model(self, model_name: str, X: np.ndarray, 
+                     groups: np.ndarray = None) -> np.ndarray:
+        """使用单个模型进行预测"""
+        if model_name not in self.models:
+            raise ValueError(f"模型 {model_name} 不存在")
         
-        if not model_names:
-            raise ValueError("没有已训练的模型可用于预测")
+        model = self.models[model_name]
+        if not hasattr(model, 'is_fitted') or not model.is_fitted:
+            raise ValueError(f"模型 {model_name} 未训练")
         
-        if weights is None:
-            weights = [1.0] * len(model_names)
-        
-        if len(weights) != len(model_names):
-            raise ValueError("权重数量必须与模型数量相同")
-        
-        # 标准化权重
-        weights = np.array(weights) / np.sum(weights)
-        
-        predictions = []
-        valid_weights = []
-        
-        for i, name in enumerate(model_names):
-            if name in self.models and hasattr(self.models[name], 'is_fitted') and self.models[name].is_fitted:
-                try:
-                    pred = self.models[name].predict(X)
-                    predictions.append(pred)
-                    valid_weights.append(weights[i])
-                    self.logger.debug(f"{name} 预测完成")
-                except Exception as e:
-                    self.logger.warning(f"✗ {name} 预测失败: {e}")
-        
-        if not predictions:
-            raise ValueError("所有模型预测都失败")
-        
-        # 重新标准化有效权重
-        valid_weights = np.array(valid_weights) / np.sum(valid_weights)
-        
-        # 集成预测
-        ensemble_pred = np.average(predictions, axis=0, weights=valid_weights)
-        
-        self.logger.info(f"集成预测完成，使用 {len(predictions)} 个模型")
-        return ensemble_pred
+        try:
+            # 根据模型类型选择预测方法
+            if model_name in ['GraphRanker', 'TransformerRanker']:
+                if groups is None:
+                    raise ValueError(f"{model_name} 预测需要groups参数")
+                predictions = model.predict(X, groups)
+            else:
+                predictions = model.predict(X)
+            
+            self.logger.debug(f"{model_name} 预测完成")
+            return predictions
+            
+        except Exception as e:
+            self.logger.error(f"✗ {model_name} 预测失败: {e}")
+            raise
     
     def get_model_summary(self) -> Dict:
         """获取模型概要信息"""
@@ -280,7 +254,11 @@ class FlightRankingModelsManager:
             'fitted_models': [],
             'unfitted_models': [],
             'feature_count': len(self.feature_names),
-            'gpu_enabled': self.use_gpu
+            'gpu_enabled': self.use_gpu,
+            'available_models': [
+                'XGBRanker', 'LGBMRanker', 'RankNet', 
+                'GraphRanker', 'CNNRanker', 'TransformerRanker'
+            ]
         }
         
         for name, model in self.models.items():
@@ -291,82 +269,76 @@ class FlightRankingModelsManager:
         
         return summary
     
-    def save_models(self, save_dir: str):
-        """保存模型 - 只保存已训练的模型"""
+    def save_model(self, model_name: str, save_dir: str):
+        """保存单个模型"""
+        if model_name not in self.models:
+            raise ValueError(f"模型 {model_name} 不存在")
+        
+        model = self.models[model_name]
+        if not hasattr(model, 'is_fitted') or not model.is_fitted:
+            raise ValueError(f"模型 {model_name} 未训练，无法保存")
+        
         os.makedirs(save_dir, exist_ok=True)
         
-        saved_count = 0
-        for name, model in self.models.items():
-            if hasattr(model, 'is_fitted') and model.is_fitted:
-                filepath = os.path.join(save_dir, f"{name}.pkl")
-                try:
-                    model.save_model(filepath)
-                    saved_count += 1
-                    self.logger.info(f"✓ 保存模型: {name}")
-                except Exception as e:
-                    self.logger.error(f"✗ 保存模型失败 {name}: {e}")
-        
-        # 保存特征名称
-        if self.feature_names:
-            feature_path = os.path.join(save_dir, "features.pkl")
-            joblib.dump(self.feature_names, feature_path)
-        
-        # 保存模型配置
-        config_path = os.path.join(save_dir, "model_configs.pkl")
-        joblib.dump(self._model_configs, config_path)
-        
-        self.logger.info(f"已保存 {saved_count} 个模型到: {save_dir}")
+        try:
+            filepath = os.path.join(save_dir, f"{model_name}.pkl")
+            model.save_model(filepath)
+            self.logger.info(f"✓ 保存模型: {model_name}")
+            
+            # 保存特征名称
+            if self.feature_names:
+                feature_path = os.path.join(save_dir, "features.pkl")
+                joblib.dump(self.feature_names, feature_path)
+            
+            # 保存模型配置
+            config_path = os.path.join(save_dir, "model_configs.pkl")
+            joblib.dump(self._model_configs, config_path)
+            
+        except Exception as e:
+            self.logger.error(f"✗ 保存模型失败 {model_name}: {e}")
+            raise
     
-    def load_models(self, save_dir: str, model_names: List[str] = None):
-        """加载模型 - 优化加载逻辑"""
-        if not os.path.exists(save_dir):
-            raise FileNotFoundError(f"模型目录不存在: {save_dir}")
+    def load_model(self, model_name: str, save_dir: str):
+        """加载单个模型"""
+        filepath = os.path.join(save_dir, f"{model_name}.pkl")
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"模型文件不存在: {filepath}")
         
-        if model_names is None:
-            model_files = [f for f in os.listdir(save_dir) 
-                          if f.endswith('.pkl') and f not in ['features.pkl', 'model_configs.pkl']]
-            model_names = [f.replace('.pkl', '') for f in model_files]
-        
-        loaded_count = 0
-        for name in model_names:
-            filepath = os.path.join(save_dir, f"{name}.pkl")
-            if os.path.exists(filepath):
-                try:
-                    if name == 'XGBRanker':
-                        self.models[name] = XGBoostRanker.load_model(filepath)
-                    elif name == 'LGBMRanker':
-                        self.models[name] = LightGBMRanker.load_model(filepath)
-                    elif name == 'RankNet':
-                        self.models[name] = RankNet.load_model(filepath)
-                    else:
-                        self.logger.warning(f"未知模型类型: {name}")
-                        continue
-                    
-                    loaded_count += 1
-                    self.logger.info(f"✓ 加载模型: {name}")
-                except Exception as e:
-                    self.logger.warning(f"✗ 加载模型失败 {name}: {e}")
-        
-        # 加载特征名称
-        feature_path = os.path.join(save_dir, "features.pkl")
-        if os.path.exists(feature_path):
-            try:
+        try:
+            if model_name == 'XGBRanker':
+                self.models[model_name] = XGBoostRanker.load_model(filepath)
+            elif model_name == 'LGBMRanker':
+                self.models[model_name] = LightGBMRanker.load_model(filepath)
+            elif model_name == 'RankNet':
+                self.models[model_name] = RankNet.load_model(filepath)
+            elif model_name == 'GraphRanker':
+                self.models[model_name] = GraphRanker.load_model(filepath)
+            elif model_name == 'CNNRanker':
+                self.models[model_name] = CNNRanker.load_model(filepath)
+            elif model_name == 'TransformerRanker':
+                self.models[model_name] = TransformerRanker.load_model(filepath)
+            else:
+                raise ValueError(f"未知模型类型: {model_name}")
+            
+            self.logger.info(f"✓ 加载模型: {model_name}")
+            
+            # 加载特征名称
+            feature_path = os.path.join(save_dir, "features.pkl")
+            if os.path.exists(feature_path):
                 self.feature_names = joblib.load(feature_path)
                 self.logger.info(f"✓ 加载特征名称: {len(self.feature_names)} 个")
-            except Exception as e:
-                self.logger.warning(f"加载特征名称失败: {e}")
-        
-        # 加载模型配置
-        config_path = os.path.join(save_dir, "model_configs.pkl")
-        if os.path.exists(config_path):
-            try:
+            
+            # 加载模型配置
+            config_path = os.path.join(save_dir, "model_configs.pkl")
+            if os.path.exists(config_path):
                 self._model_configs = joblib.load(config_path)
                 self.logger.info("✓ 加载模型配置")
-            except Exception as e:
-                self.logger.warning(f"加载模型配置失败: {e}")
-        
-        self.logger.info(f"成功加载 {loaded_count} 个模型")
-        return loaded_count > 0
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"✗ 加载模型失败 {model_name}: {e}")
+            return False
     
     def clear_models(self):
         """清空模型缓存"""
@@ -375,25 +347,31 @@ class FlightRankingModelsManager:
         self._model_configs.clear()
         self.logger.info("模型缓存已清空")
     
-    def validate_models(self) -> Dict[str, bool]:
-        """验证模型状态"""
-        validation_results = {}
+    def validate_model(self, model_name: str) -> bool:
+        """验证单个模型状态"""
+        if model_name not in self.models:
+            return False
         
-        for name, model in self.models.items():
-            try:
-                # 检查模型是否已训练
-                is_fitted = hasattr(model, 'is_fitted') and model.is_fitted
+        try:
+            model = self.models[model_name]
+            
+            # 检查模型是否已训练
+            is_fitted = hasattr(model, 'is_fitted') and model.is_fitted
+            
+            # 检查模型是否可以预测（使用小数据测试）
+            if is_fitted and self.feature_names:
+                test_X = np.random.random((10, len(self.feature_names))).astype(np.float32)
                 
-                # 检查模型是否可以预测（使用小数据测试）
-                if is_fitted:
-                    test_X = np.random.random((10, len(self.feature_names) or 5)).astype(np.float32)
-                    _ = model.predict(test_X)
-                    validation_results[name] = True
+                if model_name in ['GraphRanker', 'TransformerRanker']:
+                    test_groups = np.array([0] * 5 + [1] * 5)
+                    _ = model.predict(test_X, test_groups)
                 else:
-                    validation_results[name] = False
-                    
-            except Exception as e:
-                self.logger.warning(f"模型 {name} 验证失败: {e}")
-                validation_results[name] = False
-        
-        return validation_results
+                    _ = model.predict(test_X)
+                
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            self.logger.warning(f"模型 {model_name} 验证失败: {e}")
+            return False

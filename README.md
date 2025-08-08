@@ -1,5 +1,6 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+
 # Flight Ranking Competition - Business Travel Recommendation System ✈️
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org/)
@@ -360,7 +361,8 @@ This project is licensed under the MIT License - see the [LICENSE](License) file
 * **Repository** : [https://github.com/dishijuntian/FR.git](https://github.com/dishijuntian/FR.git)
 * **Issues** : Use GitHub Issues for bug reports and feature requests
 * **Discussions** : Use GitHub Discussions for general questions
-=======
+  =======
+
 # Flight Ranking Competition - Business Travel Recommendation System ✈️
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org/)
@@ -721,8 +723,16 @@ This project is licensed under the MIT License - see the [LICENSE](License) file
 * **Repository** : [https://github.com/dishijuntian/FR.git](https://github.com/dishijuntian/FR.git)
 * **Issues** : Use GitHub Issues for bug reports and feature requests
 * **Discussions** : Use GitHub Discussions for general questions
+
 >>>>>>> e9addff7041905ba228e279124f71a4a54b1d4e3
-=======
+>>>>>>> =======
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>
+
 # Flight Ranking Competition - Business Travel Recommendation System ✈️
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org/)
@@ -1083,4 +1093,11 @@ This project is licensed under the MIT License - see the [LICENSE](License) file
 * **Repository** : [https://github.com/dishijuntian/FR.git](https://github.com/dishijuntian/FR.git)
 * **Issues** : Use GitHub Issues for bug reports and feature requests
 * **Discussions** : Use GitHub Discussions for general questions
+
 >>>>>>> e9addff7041905ba228e279124f71a4a54b1d4e3
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>

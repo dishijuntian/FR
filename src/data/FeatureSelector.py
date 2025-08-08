@@ -143,7 +143,7 @@ class FeatureSelector:
         importance_method = self.config.get('importance_method', 'lightgbm')
         
         # 采样以提高效率
-        sample_size = min(self.config.get('sample_size', 50000), len(X))
+        sample_size = min(self.config.get('sample_size', 500000), len(X))
         if len(X) > sample_size:
             sample_idx = np.random.choice(len(X), sample_size, replace=False)
             X_sample, y_sample = X.iloc[sample_idx], y.iloc[sample_idx]
