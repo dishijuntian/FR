@@ -7,22 +7,31 @@ import hashlib
 import tempfile
 from multiprocessing import Pool, cpu_count
 from typing import List, Tuple, Optional
+import psutil
 
 def process_chunk_worker(args: Tuple) -> Tuple:
     """多进程worker：处理单个chunk的编码"""
     chunk_data, chunk_id, temp_dir = args
     
     try:
+        # 监控内存使用
+        process = psutil.Process()
+        initial_memory = process.memory_info().rss / 1024 / 1024
+        
         optimized_df = optimize_data_types(chunk_data)
         temp_file = os.path.join(temp_dir, f'chunk_{chunk_id}.parquet')
         optimized_df.to_parquet(temp_file, index=False)
         
+        # 清理内存
         del optimized_df, chunk_data
         gc.collect()
         
-        return temp_file, chunk_id, True
+        final_memory = process.memory_info().rss / 1024 / 1024
+        memory_used = final_memory - initial_memory
+        
+        return temp_file, chunk_id, True, memory_used
     except Exception as e:
-        return None, chunk_id, str(e)
+        return None, chunk_id, str(e), 0
 
 def parse_duration(duration_str) -> int:
     """解析持续时间字符串为秒数"""
@@ -41,8 +50,9 @@ def parse_duration(duration_str) -> int:
         return int(float(duration_str) * 3600)
     except:
         return 0
+
 def optimize_data_types(df: pd.DataFrame) -> pd.DataFrame:
-    """优化数据类型"""
+    """优化数据类型 - 无torch依赖版本"""
     df = df.copy()
     
     # 整数类型列
@@ -162,8 +172,18 @@ def optimize_data_types(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+def get_system_memory_info():
+    """获取系统内存信息"""
+    mem = psutil.virtual_memory()
+    return {
+        'total': mem.total / 1024 / 1024 / 1024,  # GB
+        'available': mem.available / 1024 / 1024 / 1024,  # GB
+        'percent': mem.percent,
+        'used': mem.used / 1024 / 1024 / 1024  # GB
+    }
+
 class DataEncode:
-    """数据编码处理类"""
+    """数据编码处理类 - 内存优化版本"""
     
     def __init__(self, logger=None):
         self.logger = logger
@@ -172,55 +192,76 @@ class DataEncode:
         """兼容性方法"""
         return optimize_data_types(df)
     
-    def process_file_multiprocess(self, input_file: str, output_file: str, 
-                                 chunk_size: int = 100000, n_processes: Optional[int] = None) -> Optional[str]:
-        """多进程处理文件编码"""
+    def check_memory_requirements(self, input_file: str, chunk_size: int, n_processes: int) -> bool:
+        """检查内存需求"""
+        try:
+            # 获取文件大小
+            file_size_mb = os.path.getsize(input_file) / 1024 / 1024
+            
+            # 估算内存需求 (文件大小 * 进程数 * 安全系数)
+            estimated_memory_gb = (file_size_mb * n_processes * 3) / 1024
+            
+            # 获取系统内存信息
+            mem_info = get_system_memory_info()
+            
+            if self.logger:
+                self.logger.info(f"文件大小: {file_size_mb:.1f} MB")
+                self.logger.info(f"预计内存需求: {estimated_memory_gb:.1f} GB")
+                self.logger.info(f"系统可用内存: {mem_info['available']:.1f} GB")
+            
+            if estimated_memory_gb > mem_info['available'] * 0.8:
+                if self.logger:
+                    self.logger.warning("内存可能不足，建议减少进程数或增加chunk_size")
+                return False
+                
+            return True
+        except Exception as e:
+            if self.logger:
+                self.logger.warning(f"内存检查失败: {e}")
+            return True  # 如果检查失败，继续执行
+
+    def process_file_sequential(self, input_file: str, output_file: str, 
+                               chunk_size: int = 200000) -> Optional[str]:
+        """单进程顺序处理"""
         if self.logger:
-            self.logger.info(f"开始多进程编码 {input_file}")
+            self.logger.info(f"开始单进程编码 {input_file}")
         
-        n_processes = n_processes or min(cpu_count(), 8)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                pf = pq.ParquetFile(input_file)
-                tasks = []
+        try:
+            pf = pq.ParquetFile(input_file)
+            chunks = []
+            
+            for chunk_id, batch in enumerate(pf.iter_batches(batch_size=chunk_size)):
+                df_chunk = batch.to_pandas()
+                optimized_df = optimize_data_types(df_chunk)
+                chunks.append(optimized_df)
                 
-                for chunk_id, batch in enumerate(pf.iter_batches(batch_size=chunk_size)):
-                    df_chunk = batch.to_pandas()
-                    tasks.append((df_chunk, chunk_id, temp_dir))
+                if self.logger and chunk_id % 10 == 0:
+                    mem_info = get_system_memory_info()
+                    self.logger.info(f"处理chunk {chunk_id}, 内存使用: {mem_info['percent']:.1f}%")
                 
-                if self.logger:
-                    self.logger.info(f"创建 {len(tasks)} 个任务，使用 {n_processes} 进程")
-                
-                processed_files = []
-                with Pool(n_processes) as pool:
-                    results = pool.map(process_chunk_worker, tasks)
+                # 定期清理内存
+                if len(chunks) % 10 == 0:
+                    gc.collect()
                     
-                    for temp_file, chunk_id, result in results:
-                        if result is True and temp_file and os.path.exists(temp_file):
-                            processed_files.append((chunk_id, temp_file))
-                        elif self.logger:
-                            self.logger.error(f"Chunk {chunk_id} 失败: {result}")
-                
-                if not processed_files:
+                # 如果内存使用过高，提前合并
+                if psutil.virtual_memory().percent > 85:
                     if self.logger:
-                        self.logger.error("没有成功处理的数据块")
-                    return None
-                
-                # 合并文件
-                processed_files.sort(key=lambda x: x[0])
-                df_list = [pd.read_parquet(temp_file) for _, temp_file in processed_files]
-                final_df = pd.concat(df_list, ignore_index=True)
-                final_df.to_parquet(output_file, index=False)
-                
-                if self.logger:
-                    self.logger.info(f"编码完成: {len(final_df)} 行")
-                
-                return output_file
-                
-            except Exception as e:
-                if self.logger:
-                    self.logger.error(f"编码失败: {str(e)}")
-                return None
-    
+                        self.logger.warning("内存使用过高，提前合并数据")
+                    temp_df = pd.concat(chunks, ignore_index=True)
+                    chunks = [temp_df]
+                    gc.collect()
+            
+            final_df = pd.concat(chunks, ignore_index=True)
+            final_df.to_parquet(output_file, index=False)
+            
+            if self.logger:
+                self.logger.info(f"单进程编码完成: {len(final_df)} 行")
+            
+            return output_file
+            
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"单进程编码失败: {str(e)}")
+            return None

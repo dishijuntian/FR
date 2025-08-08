@@ -1,5 +1,5 @@
-# 优化版航班排名系统配置文件
-# 特点: 自动数据集划分 + 快速训练策略
+# 增强版航班排名系统配置文件
+# 集成深度特征工程和智能特征选择
 
 # 路径配置
 paths:
@@ -12,12 +12,92 @@ paths:
 # 数据处理配置
 data_processing:
   chunk_size: 200000
-  n_processes: null  # null=自动检测CPU核数
+  n_processes: null # null=自动检测CPU核数
   force_encode: false
   force_segment: false
-  force_feature: false
+  force_feature: true
   verify_results: true
-  force_reprocess: false
+  force_reprocess: true
+  
+  # 特征工程配置
+  feature_engineering:
+    enabled: true
+    
+    # 基础特征类型
+    basic_feature_types:
+      - core           # 核心特征（价格、时间、舱位等）
+      - route          # 路线特征
+      - time           # 时间特征
+      - ranker         # 基于ranker_id的特征
+      - carrier        # 航空公司特征
+      - passenger      # 乘客特征
+      - interaction    # 基础交互特征
+    
+    # 增强特征工程
+    enhanced_features:
+      enabled: true
+      types:
+        - economic     # 经济学特征
+        - behavioral   # 行为经济学特征
+        - operational  # 运营特征
+        - customer     # 客户细分特征
+        - market       # 市场动态特征
+        - temporal     # 时间序列特征
+        - network      # 网络结构特征
+        - competitive  # 竞争态势特征
+        - anomaly      # 异常检测特征
+        - meta         # 元特征
+      max_features: 300
+      
+    # 自动特征发现
+    auto_discovery:
+      enabled: true
+      max_features: 50
+      methods:
+        - arithmetic   # 算术组合特征
+        - conditional  # 条件特征
+        - ranking      # 排名特征
+        - aggregation  # 聚合特征
+    
+  # 特征选择配置
+  feature_selection:
+    enabled: true
+    strategy: "adaptive" # adaptive, manual, disabled
+    
+    # 自适应特征选择（推荐）
+    adaptive_config:
+      enabled: true
+      max_features_ratio: 0.3  # 最大特征数占比
+      min_features: 50
+      max_features: 500
+      auto_adjust_by_data_size: true
+    
+    # 手动特征选择配置
+    manual_config:
+      max_features: 200
+      selection_methods:
+        - variance      # 方差过滤
+        - correlation   # 相关性过滤  
+        - importance    # 重要性选择
+        - statistical   # 统计方法选择
+        - univariate    # 单变量选择
+      
+      # 过滤阈值
+      variance_threshold: 0.01
+      correlation_threshold: 0.95
+      
+      # 重要性方法配置
+      importance_method: "lightgbm" # lightgbm, random_forest, lasso
+      statistical_method: "mutual_info" # mutual_info, f_test, chi2
+      
+      # 采样配置
+      sample_size: 50000
+      early_stopping: true
+      save_feature_importance: true
+      
+      # 集成策略
+      ensemble_selection: true
+      voting_threshold: 0.5 # 特征被选中的最小投票比例
 
 # 优化训练配置
 training:
@@ -26,46 +106,76 @@ training:
   use_gpu: true
   random_state: 42
   
-  # 自动数据集划分策略
-  auto_split_strategy:
-    # ranker_id数量 -> 验证集折数映射
-    thresholds:
-      1000: 2     # ≤1000个ranker: 2折 (50% train, 50% val)
-      2000: 3     # ≤2000个ranker: 3折 (67% train, 33% val)  
-      5000: 5     # ≤5000个ranker: 5折 (80% train, 20% val)
-      10000: 8    # ≤10000个ranker: 8折 (87.5% train, 12.5% val)
-      99999999: 10 # >10000个ranker: 10折 (90% train, 10% val)
+  # 特征工程相关的训练配置
+  feature_engineering_in_training:
+    # 是否在训练时动态创建特征
+    dynamic_features: false
     
-    # 验证集大小调整策略
-    validation_size_strategy:
-      small_data_threshold: 100      # 小数据集阈值
-      small_data_val_size: 0.3       # 小数据集验证集占比
-      large_data_threshold: 10000    # 大数据集阈值  
-      large_data_val_size: 0.1       # 大数据集验证集占比
-      default_val_size: 0.2          # 默认验证集占比
-  
-  # 快速训练策略
-  fast_training:
-    # 是否启用快速训练模式
+    # 是否使用特征重要性进行在线筛选
+    online_feature_selection: true
+    online_selection_rounds: 3
+    
+    # 是否启用特征交互发现
+    auto_interaction_discovery: false
+
+# 自动数据集划分策略
+auto_split_strategy:
+  thresholds:
+    1000: 2   # ≤1000个ranker: 2折
+    2000: 3   # ≤2000个ranker: 3折  
+    5000: 5   # ≤5000个ranker: 5折
+    10000: 10  # ≤10000个ranker: 8折
+    15000: 15
+    20000: 20
+    99999999: 100 # >10000个ranker: 10折
+
+# 验证集大小调整策略  
+validation_size_strategy:
+  small_data_threshold: 100
+  small_data_val_size: 0.3
+  large_data_threshold: 10000
+  large_data_val_size: 0.1
+  default_val_size: 0.2
+
+# 快速训练策略
+fast_training:
+  enabled: true
+  epochs:
+    validation: 5
+    final: 10
+  early_stopping:
     enabled: true
+    patience: 3
+    min_delta: 0.001
+
+# 内存优化
+memory_optimization:
+  clear_cache: true
+  optimize_dtypes: true
+  batch_processing: false
+  
+  # 特征工程相关的内存优化
+  feature_engineering_memory:
+    # 分批处理特征工程
+    batch_feature_engineering: true
+    batch_size: 100000
     
-    # 训练轮次调整
-    epochs:
-      validation: 5    # 验证阶段训练轮次
-      final: 10        # 最终模型训练轮次
+    # 中间结果缓存策略
+    cache_intermediate_features: false
+    cleanup_after_selection: true
+
+# 模型参数配置
+model_configs:
+  XGBRanker:
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.05
     
-    # 早停策略
-    early_stopping:
-      enabled: true
-      patience: 3      # 验证无改善的容忍轮次
-      min_delta: 0.001  # 最小改善阈值
+  LGBMRanker:
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.05
     
-    # 内存优化
-    memory_optimization:
-      clear_cache: true          # 训练后清理缓存
-      optimize_dtypes: true      # 自动优化数据类型
-      batch_processing: false    # 是否使用批处理(大数据集)
-      
   # 模型参数配置 
   model_configs:
     XGBRanker:
@@ -122,8 +232,8 @@ monitoring:
 
 # 流水线配置
 pipeline:
-  run_data_processing: false
-  run_training: false
+  run_data_processing: true
+  run_training: true
   run_prediction: true
   
   # 并行策略
@@ -141,7 +251,7 @@ logging:
   # 详细日志选项
   detailed_logging:
     model_training: true     # 详细记录模型训练过程
-    data_processing: false   # 数据处理详细日志
+    data_processing: true   # 数据处理详细日志
     memory_monitoring: true  # 内存监控日志
     performance_metrics: true # 性能指标日志
 

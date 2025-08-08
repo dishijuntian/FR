@@ -51,8 +51,10 @@ class FlightRankingTrainer:
             1000: 2,    # ≤1000个ranker_id: 2折
             2000: 3,    # ≤2000个ranker_id: 3折
             5000: 5,    # ≤5000个ranker_id: 5折
-            10000: 8,   # ≤10000个ranker_id: 8折
-            float('inf'): 10  # >10000个ranker_id: 10折
+            10000: 10,   # ≤10000个ranker_id: 8折
+            15000: 15,
+            20000: 20,
+            float('inf'): 100  # >10000个ranker_id: 10折
         }
         
         # 确保目录存在

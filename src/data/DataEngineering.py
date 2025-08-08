@@ -1,29 +1,35 @@
 """
-数据工程模块 - 特征工程和数据预处理
+合并版数据工程模块 - 集成深度特征工程和自动特征发现
+适配编码后数据，包含经济学、行为学、运营等多维度特征
 """
 import pandas as pd
 import numpy as np
 import os
 import gc
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
 import pyarrow.parquet as pq
-from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
 
 from src.utils.Common import timer
 from src.utils.MemoryUtils import MemoryUtils
 
 
 class DataEngineering:
-    """数据工程主类"""
+    """完整数据工程类 - 集成传统特征工程、增强特征工程和自动特征发现"""
     
     def __init__(self, logger=None):
         self.logger = logger
         self.processing_stats = {}
+        self.feature_importance_cache = {}
+        self.cluster_models = {}
+
+    # ==================== 核心特征工程 ====================
     
     @timer
     def create_core_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """创建核心特征（基于d.py逻辑优化）"""
+        """创建核心特征（基于编码后数据优化）"""
         df = df.copy()
         
         # 1. 价格特征
@@ -59,7 +65,7 @@ class DataEngineering:
         # 4. 航班段数统计
         for leg in [0, 1]:
             segment_cols = [col for col in df.columns 
-                           if f'legs{leg}_segments' in col and 'flightNumber' in col and col in df.columns]
+                           if f'legs{leg}_segments' in col and 'flightNumber' in col]
             if segment_cols:
                 df[f'n_segments_leg{leg}'] = (df[segment_cols] != -1).sum(axis=1).astype('int8')
             else:
@@ -67,7 +73,6 @@ class DataEngineering:
         
         # 5. 常旅客特征
         if 'frequentFlyer' in df.columns:
-            # 注意：原始数据已被哈希编码，这里基于是否为-1判断
             df['has_frequent_flyer'] = (df['frequentFlyer'] != -1).astype('int8')
         
         # 6. 二值特征
@@ -101,19 +106,9 @@ class DataEngineering:
         """创建路线相关特征"""
         df = df.copy()
         
-        # 航线特征（基于哈希值无法直接判断，使用编码后的值）
-        if 'is_round_trip' in df.columns:
-            # 这个特征在DataEncode中已经创建
-            pass
-        elif 'searchRoute' in df.columns:
-            # 如果searchRoute还存在（未被删除）
-            popular_routes = ['MOWLED/LEDMOW', 'LEDMOW/MOWLED', 'MOWLED', 'LEDMOW']
-            df['is_popular_route'] = df['searchRoute'].isin(popular_routes).astype('int8')
-        
         # 舱位等级特征
-        cabin_cols = [col for col in df.columns if 'cabinClass' in col and col in df.columns]
+        cabin_cols = [col for col in df.columns if 'cabinClass' in col]
         if len(cabin_cols) >= 2:
-            # 计算平均舱位等级
             df['avg_cabin_class'] = df[cabin_cols].replace(-1, np.nan).mean(axis=1, skipna=True).fillna(0)
         
         # 直飞特征
@@ -328,18 +323,402 @@ class DataEngineering:
         
         return df
     
+    # ==================== 经济学特征 ====================
+    
+    @timer
+    def create_economic_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建具有经济学意义的特征"""
+        df = df.copy()
+                
+        # 1. 价格弹性和需求理论特征
+        if 'totalPrice_bin' in df.columns and 'ranker_id' in df.columns:
+            # 价格弹性指标（组内价格敏感度）
+            group_price_stats = df.groupby('ranker_id')['totalPrice_bin'].agg([
+                'mean', 'std', 'min', 'max', 'count'
+            ]).reset_index()
+            group_price_stats.columns = ['ranker_id', 'group_price_mean', 'group_price_std', 
+                                       'group_price_min', 'group_price_max', 'group_size_price']
+            
+            df = df.merge(group_price_stats, on='ranker_id', how='left')
+            
+            # 相对价格位置（价格锚定效应）
+            df['price_relative_position'] = (df['totalPrice_bin'] - df['group_price_min']) / (
+                df['group_price_max'] - df['group_price_min'] + 1)
+            
+            # 价格离散系数（选择复杂度）
+            df['price_coefficient_variation'] = df['group_price_std'] / (df['group_price_mean'] + 1)
+            
+            # 是否为极值选项（锚定效应）
+            df['is_price_anchor_high'] = (df['totalPrice_bin'] == df['group_price_max']).astype('int8')
+            df['is_price_anchor_low'] = (df['totalPrice_bin'] == df['group_price_min']).astype('int8')
+            
+            # 价格-质量感知比（基于舱位和价格）
+            if 'avg_cabin_class' in df.columns:
+                df['price_quality_ratio'] = df['totalPrice_bin'] / (df['avg_cabin_class'] + 1)
+        
+        # 2. 时间价值特征（Time Value of Money）
+        if 'legs0_departureAt_hour' in df.columns:
+            # 商务时间溢价（Business Time Premium）
+            business_hours = [7, 8, 9, 17, 18, 19, 20]
+            df['is_business_prime_time'] = df['legs0_departureAt_hour'].isin(business_hours).astype('int8')
+            
+            # 红眼航班折扣效应
+            redeye_hours = [22, 23, 0, 1, 2, 3, 4, 5, 6]
+            df['is_redeye_discount'] = df['legs0_departureAt_hour'].isin(redeye_hours).astype('int8')
+            
+            # 黄金时间（8-10点，18-20点）
+            golden_hours = [8, 9, 18, 19]
+            df['is_golden_time'] = df['legs0_departureAt_hour'].isin(golden_hours).astype('int8')
+        
+        # 3. 预订行为经济学特征
+        if 'legs0_days_ahead' in df.columns:
+            # 预订时机分类（行为经济学）
+            df['booking_urgency'] = np.select([
+                df['legs0_days_ahead'] <= 1,    # 紧急预订
+                df['legs0_days_ahead'] <= 7,    # 临时预订
+                df['legs0_days_ahead'] <= 14,   # 正常预订
+                df['legs0_days_ahead'] <= 30,   # 提前预订
+                df['legs0_days_ahead'] <= 60,   # 早期预订
+            ], [4, 3, 2, 1, 0], default=0).astype('int8')
+            
+            # 最佳预订窗口（21-60天通常价格最优）
+            df['in_optimal_booking_window'] = (
+                (df['legs0_days_ahead'] >= 21) & (df['legs0_days_ahead'] <= 60)
+            ).astype('int8')
+            
+            # 冲动购买指标（<=3天）
+            df['is_impulse_booking'] = (df['legs0_days_ahead'] <= 3).astype('int8')
+        
+        # 4. 网络效应和市场集中度
+        if 'legs0_segments0_marketingCarrier_code' in df.columns:
+            # 航空公司市场份额（网络效应）
+            carrier_market_share = df['legs0_segments0_marketingCarrier_code'].value_counts(normalize=True)
+            df['carrier_market_share'] = df['legs0_segments0_marketingCarrier_code'].map(carrier_market_share)
+            
+            # 是否为市场领导者（>20%市场份额）
+            df['is_market_leader'] = (df['carrier_market_share'] > 0.2).astype('int8')
+        
+        # 5. 服务质量感知特征
+        if 'legs0_segments0_cabinClass' in df.columns and 'totalPrice_bin' in df.columns:
+            # 性价比指标
+            cabin_price_ratio = df.groupby('legs0_segments0_cabinClass')['totalPrice_bin'].mean()
+            df['cabin_price_expectation'] = df['legs0_segments0_cabinClass'].map(cabin_price_ratio)
+            df['price_expectation_gap'] = df['totalPrice_bin'] - df['cabin_price_expectation']
+        
+        # 6. 便利性溢价特征
+        if 'total_segments' in df.columns:
+            # 直飞溢价（便利性价值）
+            df['convenience_score'] = np.select([
+                df['total_segments'] == 2,  # 往返都直飞
+                df['total_segments'] == 3,  # 一程直飞
+                df['total_segments'] >= 4,  # 都需转机
+            ], [2, 1, 0], default=0).astype('int8')
+        
+        return df
+    
+    # ==================== 行为学特征 ====================
+    
+    @timer
+    def create_behavioral_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建行为经济学特征"""
+        df = df.copy()
+        
+        # 1. 选择过载理论（Choice Overload）
+        if 'ranker_id' in df.columns:
+            # 选择复杂度
+            choice_complexity = df.groupby('ranker_id').agg({
+                'Id': 'count',  # 选项数量
+                'totalPrice_bin': ['std', 'max', 'min'] if 'totalPrice_bin' in df.columns else ['count', 'count', 'count'],
+                'total_duration': ['std', 'mean'] if 'total_duration' in df.columns else ['count', 'count']
+            }).reset_index()
+            
+            choice_complexity.columns = ['ranker_id', 'choice_set_size_beh', 'price_variance_beh', 
+                                       'price_range_max_beh', 'price_range_min_beh', 'duration_variance', 'duration_mean']
+            
+            df = df.merge(choice_complexity, on='ranker_id', how='left')
+            
+            # 选择过载指标
+            df['choice_overload_score'] = np.select([
+                df['choice_set_size_beh'] >= 20,  # 高过载
+                df['choice_set_size_beh'] >= 10,  # 中等过载
+                df['choice_set_size_beh'] >= 5,   # 轻微过载
+            ], [3, 2, 1], default=0).astype('int8')
+            
+            # 选择集中度（基于价格分布）
+            df['choice_concentration'] = 1 / (df['price_variance_beh'] + 1)
+        
+        # 2. 损失厌恶特征（Loss Aversion）
+        if 'miniRules0_monetaryAmount' in df.columns and 'miniRules1_monetaryAmount' in df.columns:
+            # 潜在损失风险
+            df['max_cancellation_loss'] = np.maximum(
+                df['miniRules0_monetaryAmount'].fillna(0),
+                df['miniRules1_monetaryAmount'].fillna(0)
+            )
+            
+            # 损失厌恶阈值（相对于票价的百分比）
+            if 'totalPrice_bin' in df.columns:
+                df['loss_aversion_ratio'] = df['max_cancellation_loss'] / (df['totalPrice_bin'] + 1)
+            
+            # 低风险选项（可免费取消/改签）
+            df['is_low_risk_option'] = (
+                (df['miniRules0_monetaryAmount'] == 0) | 
+                (df['miniRules1_monetaryAmount'] == 0)
+            ).astype('int8')
+        
+        # 3. 社会认同特征（Social Proof）
+        if 'legs0_segments0_marketingCarrier_code' in df.columns and 'ranker_id' in df.columns:
+            # 同组最受欢迎航空公司
+            popular_carrier_in_group = df.groupby('ranker_id')['legs0_segments0_marketingCarrier_code'].agg(
+                lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else -1
+            ).reset_index()
+            popular_carrier_in_group.columns = ['ranker_id', 'popular_carrier']
+            
+            df = df.merge(popular_carrier_in_group, on='ranker_id', how='left')
+            df['is_popular_carrier_choice'] = (
+                df['legs0_segments0_marketingCarrier_code'] == df['popular_carrier']
+            ).astype('int8')
+        
+        # 4. 认知偏差特征
+        if 'legs0_departureAt_hour' in df.columns and 'legs0_arrivalAt_hour' in df.columns:
+            # 到达时间偏好（认知便利性）
+            df['arrival_time_preference'] = np.select([
+                df['legs0_arrivalAt_hour'].between(8, 12),   # 上午到达（便于安排）
+                df['legs0_arrivalAt_hour'].between(13, 18),  # 下午到达
+                df['legs0_arrivalAt_hour'].between(19, 22),  # 晚上到达
+            ], [2, 1, 0], default=0).astype('int8')
+        
+        # 5. 框架效应特征（Framing Effect）
+        if 'totalPrice_bin' in df.columns and 'taxes_bin' in df.columns:
+            # 价格透明度（税费占比）
+            df['price_transparency'] = df['taxes_bin'] / (df['totalPrice_bin'] + 1)
+            
+            # 隐藏成本感知
+            df['hidden_cost_perception'] = np.select([
+                df['price_transparency'] > 0.3,  # 高税费比例
+                df['price_transparency'] > 0.15, # 中等税费比例
+            ], [2, 1], default=0).astype('int8')
+        
+        return df
+    
+    # ==================== 自动特征发现 ====================
+    
+    @timer
+    def auto_discover_features(self, df: pd.DataFrame, max_total_features: int = 50) -> pd.DataFrame:
+        """自动特征发现"""
+        df = df.copy()
+        
+        original_cols = set(df.columns)
+        
+        # 1. 基于统计的特征
+        df = self._create_statistical_features(df)
+        
+        # 2. 基于聚类的特征
+        df = self._create_clustering_features(df)
+        
+        # 3. 基于分箱的特征
+        df = self._create_binning_features(df)
+        
+        # 4. 基于组合的特征
+        df = self._create_combination_features(df)
+        
+        # 5. 控制特征数量
+        new_cols = [col for col in df.columns if col not in original_cols]
+        if len(new_cols) > max_total_features:
+            # 基于方差选择特征
+            selected_cols = self._select_features_by_variance(df[new_cols], max_total_features)
+            df = df[list(original_cols) + selected_cols]
+            self.logger.info(f"自动特征发现: 创建了{len(selected_cols)}个特征（从{len(new_cols)}中选择）")
+        else:
+            self.logger.info(f"自动特征发现: 创建了{len(new_cols)}个特征")
+        
+        return df
+    
+    def _create_statistical_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建统计特征"""
+        if 'ranker_id' not in df.columns:
+            return df
+        
+        # 数值列统计特征
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        exclude_cols = ['Id', 'ranker_id', 'profileId', 'companyID']
+        numeric_cols = [col for col in numeric_cols if col not in exclude_cols]
+        
+        for col in numeric_cols[:5]:  # 限制数量
+            if df[col].nunique() > 1:
+                # 组内统计
+                df[f'{col}_group_mean'] = df.groupby('ranker_id')[col].transform('mean')
+                df[f'{col}_group_std'] = df.groupby('ranker_id')[col].transform('std').fillna(0)
+                df[f'{col}_zscore'] = (df[col] - df[f'{col}_group_mean']) / (df[f'{col}_group_std'] + 1e-6)
+        
+        return df
+    
+    def _create_clustering_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建聚类特征"""
+        try:
+            from sklearn.cluster import KMeans
+            from sklearn.preprocessing import StandardScaler
+            
+            # 选择聚类特征
+            cluster_cols = []
+            if 'totalPrice_bin' in df.columns:
+                cluster_cols.append('totalPrice_bin')
+            if 'total_duration' in df.columns:
+                cluster_cols.append('total_duration')
+            if 'legs0_days_ahead' in df.columns:
+                cluster_cols.append('legs0_days_ahead')
+            
+            if len(cluster_cols) >= 2:
+                # 数据预处理
+                X = df[cluster_cols].fillna(0)
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+                
+                # K-means聚类
+                kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+                df['cluster_label'] = kmeans.fit_predict(X_scaled)
+                
+                # 到聚类中心的距离
+                distances = kmeans.transform(X_scaled)
+                df['cluster_distance'] = np.min(distances, axis=1)
+                
+        except ImportError:
+            self.logger.info("sklearn不可用，跳过聚类特征")
+        except Exception as e:
+            self.logger.info(f"聚类特征创建失败: {e}")
+        
+        return df
+    
+    def _create_binning_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建分箱特征"""
+        # 价格分箱（如果还没有分箱特征）
+        if 'totalPrice_bin' in df.columns and 'price_quartile' not in df.columns:
+            df['price_quartile'] = pd.qcut(df['totalPrice_bin'], q=4, labels=False, duplicates='drop').astype('int8')
+        
+        # 持续时间分箱
+        if 'total_duration' in df.columns and df['total_duration'].nunique() > 10:
+            df['duration_bin'] = pd.cut(df['total_duration'], bins=5, labels=False).astype('int8')
+        
+        # 提前预订天数分箱
+        if 'legs0_days_ahead' in df.columns and df['legs0_days_ahead'].nunique() > 10:
+            df['days_ahead_bin'] = pd.cut(df['legs0_days_ahead'], 
+                                        bins=[0, 1, 7, 14, 30, 365], 
+                                        labels=False, include_lowest=True).astype('int8')
+        
+        return df
+    
+    def _create_combination_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建组合特征"""
+        # 价格效率比
+        if 'totalPrice_bin' in df.columns and 'total_duration' in df.columns:
+            df['price_per_hour'] = df['totalPrice_bin'] / (df['total_duration'] / 60 + 1)
+        
+        # 便利性得分
+        if 'is_direct_leg0' in df.columns and 'legs0_departureAt_hour' in df.columns:
+            business_hours = [7, 8, 9, 17, 18, 19, 20]
+            df['convenience_score_auto'] = (
+                df['is_direct_leg0'] * 2 + 
+                df['legs0_departureAt_hour'].isin(business_hours).astype(int)
+            ).astype('int8')
+        
+        # 风险得分（基于取消政策和价格）
+        if 'free_cancel' in df.columns and 'totalPrice_bin' in df.columns:
+            df['risk_adjusted_price'] = df['totalPrice_bin'] * (2 - df['free_cancel'])
+        
+        return df
+    
+    def _select_features_by_variance(self, df: pd.DataFrame, max_features: int) -> List[str]:
+        """基于方差选择特征"""
+        # 计算每个特征的方差
+        variances = df.var(numeric_only=True).sort_values(ascending=False)
+        
+        # 移除方差为0的特征
+        variances = variances[variances > 0]
+        
+        # 选择前max_features个特征
+        selected_features = variances.head(max_features).index.tolist()
+        
+        return selected_features
+    
+    # ==================== 主处理方法 ====================
+    
+    @timer
+    def process_enhanced_features(self, df: pd.DataFrame, 
+                                feature_types: List[str] = None,
+                                apply_selection: bool = False,
+                                max_features: int = 200) -> pd.DataFrame:
+        """
+        处理增强特征
+        
+        Args:
+            df: 输入数据
+            feature_types: 特征类型 ['economic', 'behavioral', 'auto_discovery']
+            apply_selection: 是否应用特征选择
+            max_features: 最大特征数量
+        """
+        if feature_types is None:
+            feature_types = ['economic', 'behavioral']
+        
+        df_processed = df.copy()
+        original_shape = df_processed.shape
+        
+        # 经济学特征
+        if 'economic' in feature_types:
+            df_processed = self.create_economic_features(df_processed)
+        
+        # 行为学特征
+        if 'behavioral' in feature_types:
+            df_processed = self.create_behavioral_features(df_processed)
+        
+        # 自动特征发现
+        if 'auto_discovery' in feature_types:
+            max_auto = max_features // 4  # 自动特征占总数的1/4
+            df_processed = self.auto_discover_features(df_processed, max_auto)
+        
+        # 特征选择（如果需要）
+        if apply_selection:
+            df_processed = self._apply_feature_selection(df_processed, max_features)
+        
+        final_shape = df_processed.shape
+        self.logger.info(f"增强特征工程完成: {original_shape} -> {final_shape}")
+        
+        return df_processed
+    
+    def _apply_feature_selection(self, df: pd.DataFrame, max_features: int) -> pd.DataFrame:
+        """应用特征选择"""
+        # 保留重要的原始列
+        important_cols = ['Id', 'ranker_id', 'label'] if 'label' in df.columns else ['Id', 'ranker_id']
+        if 'profileId' in df.columns:
+            important_cols.append('profileId')
+        
+        # 数值特征
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        feature_cols = [col for col in numeric_cols if col not in important_cols]
+        
+        if len(feature_cols) <= max_features:
+            return df
+        
+        # 基于方差和相关性进行特征选择
+        selected_features = self._select_features_by_variance(df[feature_cols], max_features)
+        
+        return df[important_cols + selected_features]
+    
     @timer
     def process_features(self, df: pd.DataFrame, 
-                        feature_types: List[str] = None) -> pd.DataFrame:
+                        feature_types: List[str] = None,
+                        config: Dict = None) -> pd.DataFrame:
         """
         主特征工程入口
         
         Args:
             df: 输入数据（已编码）
             feature_types: 要创建的特征类型
+            config: 配置参数
         """
         if feature_types is None:
             feature_types = ['core', 'route', 'time', 'ranker', 'carrier', 'passenger']
+        
+        if config is None:
+            config = {}
         
         df_processed = df.copy()
         original_shape = df_processed.shape
@@ -349,7 +728,7 @@ class DataEngineering:
         if self.logger:
             self.logger.info(f"开始特征工程: {original_shape}")
         
-        # 按类型创建特征
+        # 基础特征工程
         if 'core' in feature_types:
             df_processed = self.create_core_features(df_processed)
         
@@ -371,6 +750,25 @@ class DataEngineering:
         if 'interaction' in feature_types:
             df_processed = self.create_interaction_features(df_processed)
         
+        # 增强特征工程
+        enhanced_config = config.get('enhanced_features', {})
+        if enhanced_config.get('enabled', True):
+            enhanced_types = enhanced_config.get('types', ['economic', 'behavioral'])
+            df_processed = self.process_enhanced_features(
+                df_processed, 
+                feature_types=enhanced_types,
+                apply_selection=True,  # 特征选择在后面统一处理
+                max_features=enhanced_config.get('max_features', 200)
+            )
+        
+        # 自动特征发现
+        auto_discovery_config = config.get('auto_discovery', {})
+        if auto_discovery_config.get('enabled', True):
+            max_auto_features = auto_discovery_config.get('max_features', 50)
+            df_processed = self.auto_discover_features(
+                df_processed, max_total_features=max_auto_features
+            )
+        
         # 内存优化
         df_processed = MemoryUtils.optimize_dataframe_memory(df_processed)
         
@@ -387,6 +785,8 @@ class DataEngineering:
         gc.collect()
         
         return df_processed
+    
+    # ==================== 数据验证和质量控制 ====================
     
     @timer
     def validate_and_clean(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
@@ -436,11 +836,15 @@ class DataEngineering:
     
     def get_processing_summary(self) -> Dict:
         """获取处理总结"""
-        return self.processing_stats
+        summary = self.processing_stats.copy()
+        return summary
+    
+    # ==================== 文件处理接口 ====================
     
     @timer
     def process_segment_file(self, input_file: str, output_file: str, 
-                           feature_types: List[str] = None) -> bool:
+                           feature_types: List[str] = None,
+                           config: Dict = None) -> bool:
         """处理单个segment文件"""
         try:
             if not os.path.exists(input_file):
@@ -468,7 +872,7 @@ class DataEngineering:
                 return True
             
             # 特征工程
-            df_featured = self.process_features(df, feature_types)
+            df_featured = self.process_features(df, feature_types, config)
             
             # 数据验证
             df_clean, quality_report = self.validate_and_clean(df_featured)
@@ -490,7 +894,8 @@ class DataEngineering:
     
     @timer
     def process_all_segments(self, input_dir: str, output_dir: str, 
-                           data_type: str, feature_types: List[str] = None) -> bool:
+                           data_type: str, feature_types: List[str] = None,
+                           config: Dict = None) -> bool:
         """处理所有segment文件"""
         input_dir = Path(input_dir)
         output_dir = Path(output_dir)
@@ -507,10 +912,36 @@ class DataEngineering:
             
             total_count += 1
             
-            if self.process_segment_file(str(input_file), str(output_file), feature_types):
+            if self.process_segment_file(str(input_file), str(output_file), feature_types, config):
                 success_count += 1
         
         if self.logger:
             self.logger.info(f"批处理完成: {success_count}/{total_count} 个文件成功")
         
         return success_count == total_count
+    
+    # ==================== 配置和工具方法 ====================
+    
+    def get_default_config(self) -> Dict:
+        """获取默认配置"""
+        return {
+            'enhanced_features': {
+                'enabled': True,
+                'types': ['economic', 'behavioral'],
+                'max_features': 200
+            },
+            'auto_discovery': {
+                'enabled': False,
+                'max_features': 50
+            },
+            'feature_selection': {
+                'enabled': False,
+                'max_features': 500,
+                'method': 'variance'
+            },
+            'memory_optimization': {
+                'enabled': True,
+                'compress_strings': True
+            }
+        }
+    

@@ -27,7 +27,7 @@ class DataProcessor:
         
         self.base_dir = Path(base_dir)
         self.chunk_size = chunk_size
-        self.n_processes = n_processes or min(cpu_count(), 8)
+        self.n_processes = n_processes or min(cpu_count(), 1)
         self.logger = logger or logging.getLogger(__name__)
         self.config = config or {}
         
@@ -77,12 +77,7 @@ class DataProcessor:
             input_info = FileUtils.get_file_info(input_file)
             self.logger.info(f"输入: {input_info['rows']:,} 行, {input_info['size_mb']:.1f}MB")
             
-            result = self.encoder.process_file_multiprocess(
-                input_file=str(input_file),
-                output_file=str(output_file),
-                chunk_size=self.chunk_size,
-                n_processes=self.n_processes
-            )
+            result = self.encoder.process_file_sequential(input_file, output_file, chunk_size=self.chunk_size)
             
             if result:
                 output_info = FileUtils.get_file_info(output_file)
@@ -164,7 +159,7 @@ class DataProcessor:
     def engineer_features(self, data_type: str, force: bool = False) -> bool:
         """特征工程阶段"""
         # 检查是否启用特征工程
-        feature_config = self.config.get('data_processing', {}).get('feature_engineering', {})
+        feature_config = self.config.get('feature_engineering', {})
         if not feature_config.get('enabled', True):
             self.logger.info("特征工程已禁用，跳过")
             return True
@@ -190,7 +185,7 @@ class DataProcessor:
             
             # 获取特征类型配置
             feature_types = feature_config.get('feature_types', 
-                                             ['core', 'route', 'time', 'ranker', 'carrier', 'passenger'])
+                                             ['core', 'route', 'time', 'ranker', 'carrier', 'passenger', 'interaction'])
             
             if feature_config.get('enable_interactions', False):
                 feature_types.append('interaction')
@@ -200,7 +195,8 @@ class DataProcessor:
                 input_dir=str(input_dir),
                 output_dir=str(output_dir),
                 data_type=data_type,
-                feature_types=feature_types
+                feature_types=feature_types,
+                config=feature_config
             )
             
             if not success:
