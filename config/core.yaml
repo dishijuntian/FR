@@ -1,0 +1,40 @@
+# 航班排名系统核心配置文件
+# Core.py 读取此文件，并加载其他模块配置
+
+# 基础路径配置
+paths:
+  data_dir: "data/aeroclub-recsys-2025"
+  model_input_dir: "data/aeroclub-recsys-2025/processed"
+  model_save_dir: "data/aeroclub-recsys-2025/models"
+  output_dir: "data/aeroclub-recsys-2025/submissions"
+  log_dir: "logs"
+
+# 模块配置文件路径
+module_configs:
+  data_processing: "config/data_processing.yaml"
+  training: "config/training.yaml"
+  prediction: "config/prediction.yaml"
+
+# 流水线控制
+pipeline:
+  run_data_processing: true
+  run_training: true
+  run_prediction: true
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
+
+# 内存监控配置
+memory_monitoring:
+  enabled: true
+  warning_threshold: 90      # 内存使用警告阈值(%)
+  min_available_gb: 2.0      # torch加载前最小可用内存(GB)
+  cleanup_between_stages: true
+
+# 错误处理
+error_handling:
+  continue_on_failure: false
+  memory_error_retry: false

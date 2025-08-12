@@ -1,0 +1,23 @@
+# 预测模块配置
+# FlightRankingPredictor 使用
+
+# 基础预测配置
+segments: [0, 1, 2]
+use_gpu: true
+
+# 预测优化
+prediction_optimization:
+  batch_size: 10000
+  memory_efficient: true
+  save_individual_results: true
+
+# 输出配置
+output:
+  final_submission_file: "final_submission.csv"
+  individual_files: true
+  generate_report: true
+
+# 错误处理
+error_handling:
+  continue_on_segment_failure: true
+  min_successful_segments: 1

@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 """
-航班排名系统主入口
+航班排名系统主入口 - 模块化配置版本
 """
 
 import os
 import sys
-import yaml
 from pathlib import Path
-from typing import Dict, Any
 
 # 确定项目根目录
 current_path = Path(__file__).parent
@@ -17,33 +15,25 @@ sys.path.insert(0, str(project_root))
 
 from core.Core import FlightRankingCore
 
-# 默认配置文件路径
-DEFAULT_CONFIG_PATH = "config/conf.yaml"
-
-def load_config(config_path: str) -> Dict[str, Any]:
-    """加载配置文件"""
-    config_path = Path(config_path)
-    
-    if not config_path.exists():
-        raise FileNotFoundError(f"配置文件不存在: {config_path}")
-    
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-        return config
-    except yaml.YAMLError as e:
-        raise yaml.YAMLError(f"配置文件格式错误: {e}")
+# 默认核心配置文件路径
+DEFAULT_CORE_CONFIG = "config/core.yaml"
 
 def main():
     """主函数"""
     try:
-        # 加载配置文件
-        print(f"加载配置文件: {DEFAULT_CONFIG_PATH}")
-        config = load_config(DEFAULT_CONFIG_PATH)
+        # 检查核心配置文件
+        if not Path(DEFAULT_CORE_CONFIG).exists():
+            print(f"错误: 核心配置文件不存在 - {DEFAULT_CORE_CONFIG}")
+            print("请确保以下配置文件存在:")
+            print("  - config/core.yaml")
+            print("  - config/data_processing.yaml")
+            print("  - config/training.yaml")
+            print("  - config/prediction.yaml")
+            sys.exit(1)
         
         # 初始化核心控制器
-        print("初始化系统...")
-        core = FlightRankingCore(config)
+        print(f"加载核心配置: {DEFAULT_CORE_CONFIG}")
+        core = FlightRankingCore(DEFAULT_CORE_CONFIG)
 
         # 执行完整流水线
         print("=" * 50)
@@ -62,9 +52,6 @@ def main():
         
     except FileNotFoundError as e:
         print(f"文件错误: {e}")
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        print(f"配置错误: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n用户中断")

@@ -1,196 +1,308 @@
-import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 import logging
-import warnings
 import joblib
-
+from torch.utils.data import Dataset, DataLoader
+import torch.optim as optim
 import xgboost as xgb
 import lightgbm as lgb
-from sklearn.preprocessing import StandardScaler
-import torch.optim as optim
-# from torch_geometric.nn import GCNConv, global_mean_pool
-# from torch_geometric.data import Data, Batch
 
-warnings.filterwarnings('ignore')
+
+
+class FastRankingDataset(Dataset):
+    def __init__(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, max_group_size: int = 50):
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        unique_groups = np.unique(groups)
+        self.group_data = []
+        
+        for group_id in unique_groups:
+            mask = groups == group_id
+            group_X = X[mask]
+            group_y = y[mask]
+            
+            if len(group_X) > 1:
+                if len(group_X) > max_group_size:
+                    idx = np.random.choice(len(group_X), max_group_size, replace=False)
+                    group_X = group_X[idx]
+                    group_y = group_y[idx]
+                
+                group_X_tensor = torch.FloatTensor(group_X).to(self.device)
+                group_y_tensor = torch.FloatTensor(group_y).to(self.device)
+                self.group_data.append((group_X_tensor, group_y_tensor))
+    
+    def __len__(self):
+        return len(self.group_data)
+    
+    def __getitem__(self, idx):
+        return self.group_data[idx]
 
 
 class XGBoostRanker:
-    """XGBoost排名模型"""
-    
-    def __init__(self, n_estimators=200, max_depth=8, learning_rate=0.05, 
+    def __init__(self, n_estimators=100, max_depth=6, learning_rate=0.1, 
                  use_gpu=True, random_state=42, logger=None):
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.logger = logger or logging.getLogger(__name__)
         self.is_fitted = False
         
-        params = {
-            'n_estimators': n_estimators,
+        # XGBoost参数
+        self.params = {
+            'objective': 'rank:pairwise',
+            'eval_metric': 'ndcg',
+            'eta': learning_rate,
             'max_depth': max_depth,
-            'learning_rate': learning_rate,
-            'random_state': random_state,
-            'verbosity': 0,
-            'eval_metric': 'ndcg'
+            'subsample': 0.8,
+            'colsample_bytree': 0.8,
+            'seed': random_state,
+            'verbosity': 0
         }
         
+        # GPU配置
         if self.use_gpu:
-            try:
-                params.update({
-                    'tree_method': 'gpu_hist',
-                    'gpu_id': 0
-                })
-                # 测试GPU可用性
-                test_model = xgb.XGBRanker(**params)
-                test_X = np.random.random((10, 5))
-                test_y = np.random.randint(0, 3, 10)
-                test_model.fit(test_X, test_y, group=[5, 5])
-                self.logger.info("XGBoost GPU加速可用")
-            except Exception as e:
-                self.logger.warning(f"XGBoost GPU失败，使用CPU: {e}")
-                params.update({
-                    'tree_method': 'hist',
-                    'n_jobs': -1
-                })
-                self.use_gpu = False
-        else:
-            params.update({
-                'tree_method': 'hist',
-                'n_jobs': -1
+            self.params.update({
+                'tree_method': 'gpu_hist',
+                'gpu_id': 0
             })
+            if self.logger:
+                self.logger.info("XGBoost using GPU acceleration")
+        else:
+            self.params['tree_method'] = 'hist'
         
-        self.model = xgb.XGBRanker(**params)
+        self.n_estimators = n_estimators
+        self.model = None
+        self.feature_names = None
+    
+    def _prepare_data(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        """准备XGBoost训练数据"""
+        unique_groups = np.unique(groups)
+        group_sizes = []
+        
+        for group_id in unique_groups:
+            group_size = np.sum(groups == group_id)
+            group_sizes.append(group_size)
+        
+        dtrain = xgb.DMatrix(X, label=y)
+        dtrain.set_group(group_sizes)
+        
+        return dtrain, group_sizes
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
-        """训练模型"""
-        unique_groups = np.unique(groups)
-        group_sizes = [np.sum(groups == g) for g in unique_groups]
-        
-        self.model.fit(X, y, group=group_sizes)
-        self.is_fitted = True
-        self.logger.info("XGBoost训练完成")
+        """训练XGBoost排序模型"""
+        try:
+            self.logger.info(f"Training XGBoost with {len(X)} samples, GPU: {self.use_gpu}")
+            
+            dtrain, group_sizes = self._prepare_data(X, y, groups)
+            
+            self.model = xgb.train(
+                self.params,
+                dtrain,
+                num_boost_round=self.n_estimators,
+                verbose_eval=False
+            )
+            
+            self.is_fitted = True
+            self.logger.info("XGBoost training completed")
+            
+        except Exception as e:
+            self.logger.error(f"XGBoost training failed: {e}")
+            raise e
     
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """预测分数"""
-        if not self.is_fitted:
-            raise ValueError("模型未训练")
-        return self.model.predict(X)
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("Model not trained")
+        
+        try:
+            dtest = xgb.DMatrix(X)
+            predictions = self.model.predict(dtest)
+            return predictions
+            
+        except Exception as e:
+            self.logger.error(f"XGBoost prediction failed: {e}")
+            raise e
+    
+    def get_feature_importance(self) -> dict:
+        """获取特征重要性"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("Model not trained")
+        return self.model.get_score(importance_type='weight')
     
     def save_model(self, filepath: str):
         """保存模型"""
         if not self.is_fitted:
-            raise ValueError("模型未训练，无法保存")
-        joblib.dump(self, filepath)
+            raise ValueError("Model not trained")
+        
+        model_data = {
+            'model': self.model,
+            'params': self.params,
+            'n_estimators': self.n_estimators,
+            'is_fitted': self.is_fitted,
+            'use_gpu': self.use_gpu
+        }
+        
+        joblib.dump(model_data, filepath)
     
     @classmethod
     def load_model(cls, filepath: str):
         """加载模型"""
-        return joblib.load(filepath)
+        model_data = joblib.load(filepath)
+        
+        instance = cls(
+            n_estimators=model_data['n_estimators'],
+            use_gpu=model_data.get('use_gpu', False)
+        )
+        
+        instance.model = model_data['model']
+        instance.params = model_data['params']
+        instance.is_fitted = model_data['is_fitted']
+        
+        return instance
 
 
 class LightGBMRanker:
-    """LightGBM排名模型"""
-    
-    def __init__(self, n_estimators=200, max_depth=8, learning_rate=0.05,
+    def __init__(self, n_estimators=100, max_depth=6, learning_rate=0.1,
                  use_gpu=True, random_state=42, logger=None):
+
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.logger = logger or logging.getLogger(__name__)
         self.is_fitted = False
         
-        params = {
-            'n_estimators': n_estimators,
-            'max_depth': max_depth,
+        # LightGBM参数
+        self.params = {
+            'objective': 'lambdarank',
+            'metric': 'ndcg',
+            'boosting_type': 'gbdt',
+            'num_leaves': 2 ** max_depth - 1,
             'learning_rate': learning_rate,
-            'random_state': random_state,
-            'verbose': -1,
-            'metric': 'ndcg'
+            'feature_fraction': 0.8,
+            'bagging_fraction': 0.8,
+            'bagging_freq': 5,
+            'seed': random_state,
+            'verbosity': -1,
+            'force_col_wise': True
         }
         
+        # GPU配置
         if self.use_gpu:
-            try:
-                params.update({
-                    'device': 'gpu',
-                    'gpu_platform_id': 0,
-                    'gpu_device_id': 0
-                })
-                # 测试GPU可用性
-                test_model = lgb.LGBMRanker(**params)
-                test_X = np.random.random((10, 5))
-                test_y = np.random.randint(0, 3, 10)
-                test_model.fit(test_X, test_y, group=[5, 5])
-                self.logger.info("LightGBM GPU加速可用")
-            except Exception as e:
-                self.logger.warning(f"LightGBM GPU失败，使用CPU: {e}")
-                params.update({
-                    'device': 'cpu',
-                    'n_jobs': -1
-                })
-                self.use_gpu = False
-        else:
-            params.update({
-                'device': 'cpu',
-                'n_jobs': -1
+            self.params.update({
+                'device': 'gpu',
+                'gpu_platform_id': 0,
+                'gpu_device_id': 0
             })
+            if self.logger:
+                self.logger.info("LightGBM using GPU acceleration")
         
-        self.model = lgb.LGBMRanker(**params)
+        self.n_estimators = n_estimators
+        self.model = None
+    
+    def _prepare_data(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        """准备LightGBM训练数据"""
+        unique_groups = np.unique(groups)
+        group_sizes = []
+        
+        for group_id in unique_groups:
+            group_size = np.sum(groups == group_id)
+            group_sizes.append(group_size)
+        
+        train_data = lgb.Dataset(X, label=y, group=group_sizes)
+        
+        return train_data, group_sizes
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
-        """训练模型"""
-        unique_groups = np.unique(groups)
-        group_sizes = [np.sum(groups == g) for g in unique_groups]
-        
-        self.model.fit(X, y, group=group_sizes)
-        self.is_fitted = True
-        self.logger.info("LightGBM训练完成")
+        """训练LightGBM排序模型"""
+        try:
+            self.logger.info(f"Training LightGBM with {len(X)} samples, GPU: {self.use_gpu}")
+            
+            train_data, group_sizes = self._prepare_data(X, y, groups)
+            
+            self.model = lgb.train(
+                self.params,
+                train_data,
+                num_boost_round=self.n_estimators,
+                callbacks=[lgb.log_evaluation(0)]
+            )
+            
+            self.is_fitted = True
+            self.logger.info("LightGBM training completed")
+            
+        except Exception as e:
+            self.logger.error(f"LightGBM training failed: {e}")
+            raise e
     
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """预测分数"""
-        if not self.is_fitted:
-            raise ValueError("模型未训练")
-        return self.model.predict(X)
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("Model not trained")
+        
+        try:
+            predictions = self.model.predict(X)
+            return predictions
+            
+        except Exception as e:
+            self.logger.error(f"LightGBM prediction failed: {e}")
+            raise e
+    
+    def get_feature_importance(self) -> dict:
+        """获取特征重要性"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("Model not trained")
+        importances = self.model.feature_importance(importance_type='gain')
+        return {f'f{i}': imp for i, imp in enumerate(importances)}
     
     def save_model(self, filepath: str):
         """保存模型"""
         if not self.is_fitted:
-            raise ValueError("模型未训练，无法保存")
-        joblib.dump(self, filepath)
+            raise ValueError("Model not trained")
+        
+        model_data = {
+            'model': self.model,
+            'params': self.params,
+            'n_estimators': self.n_estimators,
+            'is_fitted': self.is_fitted,
+            'use_gpu': self.use_gpu
+        }
+        
+        joblib.dump(model_data, filepath)
     
     @classmethod
     def load_model(cls, filepath: str):
         """加载模型"""
-        return joblib.load(filepath)
+        model_data = joblib.load(filepath)
+        
+        instance = cls(
+            n_estimators=model_data['n_estimators'],
+            use_gpu=model_data.get('use_gpu', False)
+        )
+        
+        instance.model = model_data['model']
+        instance.params = model_data['params']
+        instance.is_fitted = model_data['is_fitted']
+        
+        return instance
 
 
 class RankNet:
-    """RankNet深度学习排名模型"""
-    
-    def __init__(self, input_dim: int, hidden_dims: List[int] = [128, 64, 32],
+    def __init__(self, input_dim: int = None, hidden_dims: List[int] = [256, 128],
                  dropout_rate: float = 0.2, learning_rate: float = 0.001,
                  use_gpu: bool = True, random_state: int = 42, logger=None):
-        self.input_dim = input_dim
+        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        self.logger = logger or logging.getLogger(__name__)
+        self.is_fitted = False
+        
+        self.model = None
         self.hidden_dims = hidden_dims
         self.dropout_rate = dropout_rate
         self.learning_rate = learning_rate
-        self.use_gpu = use_gpu and torch.cuda.is_available()
-        self.logger = logger or logging.getLogger(__name__)
-        self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-        self.is_fitted = False
-        
-        # 构建网络
-        self._build_network()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        self.scaler = StandardScaler()
-        
-        if self.use_gpu:
-            self.model = self.model.to(self.device)
-            self.logger.info("RankNet GPU加速可用")
+        self.optimizer = None
+        self.scaler_mean = None
+        self.scaler_std = None
     
-    def _build_network(self):
-        """构建网络结构"""
+    def _build_model(self, input_dim):
         layers = []
-        prev_dim = self.input_dim
+        prev_dim = input_dim
         
         for hidden_dim in self.hidden_dims:
             layers.extend([
@@ -201,646 +313,605 @@ class RankNet:
             prev_dim = hidden_dim
         
         layers.append(nn.Linear(prev_dim, 1))
-        self.model = nn.Sequential(*layers)
-    
-    def _pairwise_loss(self, scores1: torch.Tensor, scores2: torch.Tensor, 
-                      labels1: torch.Tensor, labels2: torch.Tensor) -> torch.Tensor:
-        """计算成对损失"""
-        label_diff = labels1 - labels2
-        score_diff = scores1 - scores2
-        
-        prob = torch.sigmoid(score_diff)
-        target = (label_diff > 0).float()
-        
-        mask = (label_diff != 0)
-        if mask.sum() == 0:
-            return torch.tensor(0.0, device=self.device)
-        
-        loss = F.binary_cross_entropy(prob[mask], target[mask])
-        return loss
+        return nn.Sequential(*layers).to(self.device)
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 100):
-        """训练模型"""
-        X_scaled = self.scaler.fit_transform(X)
-        X_tensor = torch.FloatTensor(X_scaled).to(self.device)
-        y_tensor = torch.FloatTensor(y).to(self.device)
+        n_features = X.shape[1]
+        self.model = self._build_model(n_features)
+        
+        self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
+        self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
+        
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+        dataset = FastRankingDataset(X, y, groups, max_group_size=35)
+        dataloader = DataLoader(dataset, batch_size=24, shuffle=True, num_workers=0)
         
         self.model.train()
+        max_epochs = min(epochs, 40)
         
-        for epoch in range(epochs):
-            epoch_loss = 0.0
-            num_batches = 0
-            
-            unique_groups = np.unique(groups)
-            for group_id in unique_groups:
-                group_mask = groups == group_id
-                group_X = X_tensor[group_mask]
-                group_y = y_tensor[group_mask]
+        for epoch in range(max_epochs):
+            for batch_groups in dataloader:
+                batch_loss = 0
+                valid_batches = 0
                 
-                if len(group_X) < 2:
-                    continue
-                
-                indices = torch.arange(len(group_X), device=self.device)
-                pairs = torch.combinations(indices, 2)
-                
-                if len(pairs) == 0:
-                    continue
-                
-                idx1, idx2 = pairs[:, 0], pairs[:, 1]
-                X1, X2 = group_X[idx1], group_X[idx2]
-                y1, y2 = group_y[idx1], group_y[idx2]
-                
-                scores1 = self.model(X1).squeeze()
-                scores2 = self.model(X2).squeeze()
-                
-                loss = self._pairwise_loss(scores1, scores2, y1, y2)
-                
-                if loss > 0:
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
+                for group_X, group_y in batch_groups:
+                    if len(group_X) < 2:
+                        continue
                     
-                    epoch_loss += loss.item()
-                    num_batches += 1
-            
-            if (epoch + 1) % 20 == 0 and num_batches > 0:
-                avg_loss = epoch_loss / num_batches
-                self.logger.info(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
+                    group_X_scaled = (group_X - self.scaler_mean) / self.scaler_std
+                    scores = self.model(group_X_scaled).squeeze()
+                    
+                    # 简化的pairwise loss
+                    indices = torch.arange(len(group_X), device=self.device)
+                    if len(indices) > 20:
+                        indices = indices[torch.randperm(len(indices))[:20]]
+                    
+                    pairs = torch.combinations(indices, 2)
+                    if len(pairs) > 25:
+                        pairs = pairs[torch.randperm(len(pairs))[:25]]
+                    
+                    if len(pairs) == 0:
+                        continue
+                    
+                    idx1, idx2 = pairs[:, 0], pairs[:, 1]
+                    scores1, scores2 = scores[idx1], scores[idx2]
+                    labels1, labels2 = group_y[idx1], group_y[idx2]
+                    
+                    label_diff = labels1 - labels2
+                    score_diff = scores1 - scores2
+                    prob = torch.sigmoid(score_diff)
+                    target = (label_diff > 0).float()
+                    
+                    mask = (label_diff != 0)
+                    if mask.sum() > 0:
+                        loss = F.binary_cross_entropy(prob[mask], target[mask])
+                        batch_loss += loss
+                        valid_batches += 1
+                
+                if valid_batches > 0:
+                    batch_loss = batch_loss / valid_batches
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    self.optimizer.step()
         
         self.is_fitted = True
-        self.logger.info("RankNet训练完成")
     
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """预测分数"""
-        if not self.is_fitted:
-            raise ValueError("模型未训练")
-        
         self.model.eval()
-        with torch.no_grad():
-            X_scaled = self.scaler.transform(X)
-            X_tensor = torch.FloatTensor(X_scaled).to(self.device)
-            scores = self.model(X_tensor).squeeze().cpu().numpy()
+        batch_size = 10000
+        all_scores = []
         
-        return scores
+        with torch.no_grad():
+            for i in range(0, len(X), batch_size):
+                batch_X = X[i:i+batch_size]
+                X_tensor = torch.FloatTensor(batch_X).to(self.device)
+                X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
+                scores = self.model(X_scaled).squeeze().cpu().numpy()
+                all_scores.append(scores)
+        
+        return np.concatenate(all_scores)
     
     def save_model(self, filepath: str):
-        """保存模型"""
-        if not self.is_fitted:
-            raise ValueError("模型未训练，无法保存")
-        joblib.dump(self, filepath)
+        torch.save({
+            'model_state': self.model.state_dict(),
+            'scaler_mean': self.scaler_mean,
+            'scaler_std': self.scaler_std,
+            'hidden_dims': self.hidden_dims,
+            'dropout_rate': self.dropout_rate,
+            'learning_rate': self.learning_rate,
+            'is_fitted': self.is_fitted
+        }, filepath)
     
     @classmethod
     def load_model(cls, filepath: str):
-        """加载模型"""
-        return joblib.load(filepath)
+        checkpoint = torch.load(filepath, map_location='cpu')
+        instance = cls(
+            hidden_dims=checkpoint['hidden_dims'],
+            dropout_rate=checkpoint['dropout_rate'],
+            learning_rate=checkpoint['learning_rate']
+        )
+        n_features = checkpoint['scaler_mean'].shape[0]
+        instance.model = instance._build_model(n_features)
+        instance.model.load_state_dict(checkpoint['model_state'])
+        instance.scaler_mean = checkpoint['scaler_mean']
+        instance.scaler_std = checkpoint['scaler_std']
+        instance.is_fitted = checkpoint['is_fitted']
+        return instance
 
 
-# class GraphRanker:
-#     """图神经网络排名模型 - 建模航班间的竞争关系"""
-    
-#     def __init__(self, input_dim: int, hidden_dims: List[int] = [64, 32], 
-#                  num_gnn_layers: int = 3, dropout_rate: float = 0.2,
-#                  learning_rate: float = 0.001, use_gpu: bool = True, 
-#                  random_state: int = 42, logger=None):
-#         self.input_dim = input_dim
-#         self.hidden_dims = hidden_dims
-#         self.num_gnn_layers = num_gnn_layers
-#         self.dropout_rate = dropout_rate
-#         self.learning_rate = learning_rate
-#         self.use_gpu = use_gpu and torch.cuda.is_available()
-#         self.logger = logger or logging.getLogger(__name__)
-#         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-#         self.is_fitted = False
+class GraphRanker:
+    def __init__(self, input_dim: int = None, hidden_dims: List[int] = [128, 64], 
+                 num_gnn_layers: int = 2, dropout_rate: float = 0.2,
+                 learning_rate: float = 0.001, use_gpu: bool = True, 
+                 random_state: int = 42, logger=None):
+        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        self.logger = logger or logging.getLogger(__name__)
+        self.is_fitted = False
         
-#         # 构建网络
-#         self._build_network()
-#         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-#         self.scaler = StandardScaler()
-        
-#         if self.use_gpu:
-#             self.model = self.model.to(self.device)
-#             self.logger.info("GraphRanker GPU加速可用")
+        self.model = None
+        self.hidden_dims = hidden_dims
+        self.num_gnn_layers = num_gnn_layers
+        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
+        self.optimizer = None
+        self.scaler_mean = None
+        self.scaler_std = None
     
-#     def _build_network(self):
-#         """构建图神经网络"""
-#         class GNNRankingModel(nn.Module):
-#             def __init__(self, input_dim, hidden_dims, num_gnn_layers, dropout_rate):
-#                 super().__init__()
-#                 self.num_gnn_layers = num_gnn_layers
+    def _build_model(self, input_dim):
+        class SimpleGNN(nn.Module):
+            def __init__(self, input_dim, hidden_dims, num_layers, dropout_rate):
+                super().__init__()
+                self.layers = nn.ModuleList()
+                prev_dim = input_dim
                 
-#                 # GNN层
-#                 self.gnn_layers = nn.ModuleList()
-#                 prev_dim = input_dim
+                for _ in range(num_layers):
+                    self.layers.append(nn.Linear(prev_dim, hidden_dims[0]))
+                    prev_dim = hidden_dims[0]
                 
-#                 for i in range(num_gnn_layers):
-#                     if i < len(hidden_dims):
-#                         curr_dim = hidden_dims[i]
-#                     else:
-#                         curr_dim = hidden_dims[-1]
+                self.attention = nn.MultiheadAttention(prev_dim, 4, dropout=dropout_rate, batch_first=True)
+                self.final = nn.Sequential(
+                    nn.Linear(prev_dim, hidden_dims[-1]),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                    nn.Linear(hidden_dims[-1], 1)
+                )
+            
+            def forward(self, x):
+                for layer in self.layers:
+                    x = F.relu(layer(x))
+                
+                x = x.unsqueeze(0)
+                attn_out, _ = self.attention(x, x, x)
+                x = attn_out.squeeze(0)
+                
+                return self.final(x).squeeze(-1)
+        
+        return SimpleGNN(input_dim, self.hidden_dims, self.num_gnn_layers, self.dropout_rate).to(self.device)
+    
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        n_features = X.shape[1]
+        self.model = self._build_model(n_features)
+        
+        self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
+        self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
+        
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+        dataset = FastRankingDataset(X, y, groups, max_group_size=30)
+        dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0)
+        
+        self.model.train()
+        for epoch in range(30):
+            for batch_groups in dataloader:
+                batch_loss = 0
+                valid_batches = 0
+                
+                for group_X, group_y in batch_groups:
+                    if len(group_X) < 2:
+                        continue
                     
-#                     self.gnn_layers.append(GCNConv(prev_dim, curr_dim))
-#                     prev_dim = curr_dim
-                
-#                 # 最终预测层
-#                 self.final_layers = nn.Sequential(
-#                     nn.Linear(prev_dim, hidden_dims[-1] if hidden_dims else 32),
-#                     nn.ReLU(),
-#                     nn.Dropout(dropout_rate),
-#                     nn.Linear(hidden_dims[-1] if hidden_dims else 32, 1)
-#                 )
-            
-#             def forward(self, x, edge_index, batch):
-#                 # GNN层
-#                 for i, gnn_layer in enumerate(self.gnn_layers):
-#                     x = gnn_layer(x, edge_index)
-#                     if i < len(self.gnn_layers) - 1:
-#                         x = F.relu(x)
-#                         x = F.dropout(x, training=self.training)
-                
-#                 # 最终预测
-#                 x = self.final_layers(x)
-#                 return x.squeeze()
-        
-#         self.model = GNNRankingModel(
-#             self.input_dim, self.hidden_dims, 
-#             self.num_gnn_layers, self.dropout_rate
-#         )
-    
-#     def _create_flight_graph(self, X: np.ndarray, groups: np.ndarray) -> List[Data]:
-#         """为每个搜索会话创建航班竞争图"""
-#         graph_list = []
-#         unique_groups = np.unique(groups)
-        
-#         for group_id in unique_groups:
-#             group_mask = groups == group_id
-#             group_X = X[group_mask]
-            
-#             if len(group_X) < 2:
-#                 continue
-            
-#             # 节点特征
-#             node_features = torch.FloatTensor(group_X)
-            
-#             # 创建边：同一搜索会话中的航班互相连接（完全图）
-#             num_nodes = len(group_X)
-#             edge_list = []
-            
-#             for i in range(num_nodes):
-#                 for j in range(num_nodes):
-#                     if i != j:
-#                         edge_list.append([i, j])
-            
-#             if edge_list:
-#                 edge_index = torch.LongTensor(edge_list).t().contiguous()
-#             else:
-#                 edge_index = torch.empty((2, 0), dtype=torch.long)
-            
-#             # 创建图数据
-#             graph_data = Data(x=node_features, edge_index=edge_index)
-#             graph_list.append((graph_data, group_mask))
-        
-#         return graph_list
-    
-#     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 100):
-#         """训练模型"""
-#         X_scaled = self.scaler.fit_transform(X)
-        
-#         self.model.train()
-        
-#         for epoch in range(epochs):
-#             epoch_loss = 0.0
-#             num_batches = 0
-            
-#             # 为每个组创建图
-#             graph_list = self._create_flight_graph(X_scaled, groups)
-            
-#             for graph_data, group_mask in graph_list:
-#                 group_y = torch.FloatTensor(y[group_mask]).to(self.device)
-                
-#                 if len(group_y) < 2:
-#                     continue
-                
-#                 graph_data = graph_data.to(self.device)
-                
-#                 # 前向传播
-#                 scores = self.model(graph_data.x, graph_data.edge_index, None)
-                
-#                 # 计算ranking loss (listwise loss)
-#                 # 使用softmax + cross entropy for ranking
-#                 if torch.sum(group_y) == 1:  # 只有一个正样本
-#                     target_idx = torch.argmax(group_y)
-#                     loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
-#                 else:
-#                     # 使用pairwise ranking loss
-#                     pos_mask = group_y > 0
-#                     neg_mask = group_y == 0
+                    group_X_scaled = (group_X - self.scaler_mean) / self.scaler_std
+                    scores = self.model(group_X_scaled)
                     
-#                     if pos_mask.sum() > 0 and neg_mask.sum() > 0:
-#                         pos_scores = scores[pos_mask].mean()
-#                         neg_scores = scores[neg_mask].mean()
-#                         loss = F.relu(1.0 - (pos_scores - neg_scores))
-#                     else:
-#                         continue
-                
-#                 if loss > 0:
-#                     self.optimizer.zero_grad()
-#                     loss.backward()
-#                     self.optimizer.step()
+                    if torch.sum(group_y) == 1:
+                        target_idx = torch.argmax(group_y)
+                        loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
+                    else:
+                        pos_mask = group_y > 0
+                        neg_mask = group_y == 0
+                        if pos_mask.sum() > 0 and neg_mask.sum() > 0:
+                            pos_scores = scores[pos_mask].mean()
+                            neg_scores = scores[neg_mask].mean()
+                            loss = F.relu(1.0 - (pos_scores - neg_scores))
+                        else:
+                            continue
                     
-#                     epoch_loss += loss.item()
-#                     num_batches += 1
-            
-#             if (epoch + 1) % 20 == 0 and num_batches > 0:
-#                 avg_loss = epoch_loss / num_batches
-#                 self.logger.info(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
+                    batch_loss += loss
+                    valid_batches += 1
+                
+                if valid_batches > 0:
+                    batch_loss = batch_loss / valid_batches
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    self.optimizer.step()
         
-#         self.is_fitted = True
-#         self.logger.info("GraphRanker训练完成")
+        self.is_fitted = True
     
-#     def predict(self, X: np.ndarray, groups: np.ndarray) -> np.ndarray:
-#         """预测分数"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练")
+    def predict(self, X: np.ndarray, groups: np.ndarray = None) -> np.ndarray:
+        self.model.eval()
+        batch_size = 10000
+        all_scores = []
         
-#         self.model.eval()
-#         X_scaled = self.scaler.transform(X)
-#         all_scores = np.zeros(len(X))
+        with torch.no_grad():
+            for i in range(0, len(X), batch_size):
+                batch_X = X[i:i+batch_size]
+                X_tensor = torch.FloatTensor(batch_X).to(self.device)
+                X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
+                scores = self.model(X_scaled).cpu().numpy()
+                all_scores.append(scores)
         
-#         with torch.no_grad():
-#             graph_list = self._create_flight_graph(X_scaled, groups)
-            
-#             for graph_data, group_mask in graph_list:
-#                 graph_data = graph_data.to(self.device)
-#                 scores = self.model(graph_data.x, graph_data.edge_index, None)
-#                 all_scores[group_mask] = scores.cpu().numpy()
-        
-#         return all_scores
+        return np.concatenate(all_scores)
     
-#     def save_model(self, filepath: str):
-#         """保存模型"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练，无法保存")
-#         joblib.dump(self, filepath)
+    def save_model(self, filepath: str):
+        torch.save({
+            'model_state': self.model.state_dict(),
+            'scaler_mean': self.scaler_mean,
+            'scaler_std': self.scaler_std,
+            'hidden_dims': self.hidden_dims,
+            'num_gnn_layers': self.num_gnn_layers,
+            'dropout_rate': self.dropout_rate,
+            'learning_rate': self.learning_rate,
+            'is_fitted': self.is_fitted
+        }, filepath)
     
-#     @classmethod
-#     def load_model(cls, filepath: str):
-#         """加载模型"""
-#         return joblib.load(filepath)
+    @classmethod
+    def load_model(cls, filepath: str):
+        checkpoint = torch.load(filepath, map_location='cpu')
+        instance = cls(
+            hidden_dims=checkpoint['hidden_dims'],
+            num_gnn_layers=checkpoint['num_gnn_layers'],
+            dropout_rate=checkpoint['dropout_rate'],
+            learning_rate=checkpoint['learning_rate']
+        )
+        n_features = checkpoint['scaler_mean'].shape[0]
+        instance.model = instance._build_model(n_features)
+        instance.model.load_state_dict(checkpoint['model_state'])
+        instance.scaler_mean = checkpoint['scaler_mean']
+        instance.scaler_std = checkpoint['scaler_std']
+        instance.is_fitted = checkpoint['is_fitted']
+        return instance
 
 
-# class CNNRanker:
-#     """CNN排名模型 - 处理特征序列模式"""
-    
-#     def __init__(self, input_dim: int, sequence_length: int = 10,
-#                  conv_channels: List[int] = [32, 64, 128], 
-#                  kernel_sizes: List[int] = [3, 5, 7],
-#                  hidden_dims: List[int] = [128, 64],
-#                  dropout_rate: float = 0.2, learning_rate: float = 0.001,
-#                  use_gpu: bool = True, random_state: int = 42, logger=None):
-#         self.input_dim = input_dim
-#         self.sequence_length = sequence_length
-#         self.conv_channels = conv_channels
-#         self.kernel_sizes = kernel_sizes
-#         self.hidden_dims = hidden_dims
-#         self.dropout_rate = dropout_rate
-#         self.learning_rate = learning_rate
-#         self.use_gpu = use_gpu and torch.cuda.is_available()
-#         self.logger = logger or logging.getLogger(__name__)
-#         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-#         self.is_fitted = False
+class TransformerRanker:
+    def __init__(self, input_dim: int = None, d_model: int = 128, nhead: int = 4,
+                 num_layers: int = 2, dim_feedforward: int = 256,
+                 dropout_rate: float = 0.1, learning_rate: float = 0.001,
+                 use_gpu: bool = True, random_state: int = 42, logger=None):
+        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        self.logger = logger or logging.getLogger(__name__)
+        self.is_fitted = False
         
-#         # 构建网络
-#         self._build_network()
-#         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-#         self.scaler = StandardScaler()
-        
-#         if self.use_gpu:
-#             self.model = self.model.to(self.device)
-#             self.logger.info("CNNRanker GPU加速可用")
+        self.model = None
+        self.d_model = d_model
+        self.nhead = nhead
+        self.num_layers = num_layers
+        self.dim_feedforward = dim_feedforward
+        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
+        self.optimizer = None
+        self.scaler_mean = None
+        self.scaler_std = None
     
-#     def _build_network(self):
-#         """构建CNN网络"""
-#         class CNNRankingModel(nn.Module):
-#             def __init__(self, input_dim, sequence_length, conv_channels, 
-#                         kernel_sizes, hidden_dims, dropout_rate):
-#                 super().__init__()
-#                 self.sequence_length = sequence_length
+    def _build_model(self, input_dim):
+        class TransformerRankingModel(nn.Module):
+            def __init__(self, input_dim, d_model, nhead, num_layers, 
+                        dim_feedforward, dropout_rate):
+                super().__init__()
                 
-#                 # 多尺度卷积层
-#                 self.conv_layers = nn.ModuleList()
-#                 for i, (channels, kernel_size) in enumerate(zip(conv_channels, kernel_sizes)):
-#                     if i == 0:
-#                         in_channels = 1  # 输入是1D信号
-#                     else:
-#                         in_channels = conv_channels[i-1]
-                    
-#                     self.conv_layers.append(nn.Sequential(
-#                         nn.Conv1d(in_channels, channels, kernel_size, padding=kernel_size//2),
-#                         nn.ReLU(),
-#                         nn.BatchNorm1d(channels),
-#                         nn.Dropout(dropout_rate)
-#                     ))
+                self.input_projection = nn.Linear(input_dim, d_model)
                 
-#                 # 全局池化
-#                 self.global_pool = nn.AdaptiveAvgPool1d(1)
+                encoder_layer = nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=nhead,
+                    dim_feedforward=dim_feedforward,
+                    dropout=dropout_rate,
+                    batch_first=True
+                )
+                self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
                 
-#                 # 全连接层
-#                 fc_input_dim = sum(conv_channels) + input_dim  # 卷积特征 + 原始特征
-                
-#                 fc_layers = []
-#                 prev_dim = fc_input_dim
-#                 for hidden_dim in hidden_dims:
-#                     fc_layers.extend([
-#                         nn.Linear(prev_dim, hidden_dim),
-#                         nn.ReLU(),
-#                         nn.Dropout(dropout_rate)
-#                     ])
-#                     prev_dim = hidden_dim
-                
-#                 fc_layers.append(nn.Linear(prev_dim, 1))
-#                 self.fc = nn.Sequential(*fc_layers)
+                self.output_layer = nn.Sequential(
+                    nn.Linear(d_model, d_model // 2),
+                    nn.ReLU(),
+                    nn.Dropout(dropout_rate),
+                    nn.Linear(d_model // 2, 1)
+                )
             
-#             def forward(self, x):
-#                 batch_size = x.size(0)
+            def forward(self, x):
+                if x.dim() == 2:
+                    x = x.unsqueeze(0)
                 
-#                 # 将特征重塑为序列格式
-#                 # 简单的方法：将特征分割成多个片段
-#                 feature_dim = x.size(1)
-#                 if feature_dim >= self.sequence_length:
-#                     # 将特征分割成sequence_length段
-#                     segment_size = feature_dim // self.sequence_length
-#                     x_seq = x[:, :segment_size * self.sequence_length]
-#                     x_seq = x_seq.view(batch_size, 1, segment_size * self.sequence_length)
-#                 else:
-#                     # 重复特征以达到所需长度
-#                     repeat_times = self.sequence_length // feature_dim + 1
-#                     x_seq = x.repeat(1, repeat_times)[:, :self.sequence_length]
-#                     x_seq = x_seq.view(batch_size, 1, self.sequence_length)
+                x = self.input_projection(x)
+                x = self.transformer(x)
+                x = self.output_layer(x)
                 
-#                 # 多尺度卷积特征提取
-#                 conv_features = []
-#                 current_x = x_seq
-                
-#                 for conv_layer in self.conv_layers:
-#                     current_x = conv_layer(current_x)
-#                     # 全局平均池化
-#                     pooled = self.global_pool(current_x).squeeze(-1)
-#                     conv_features.append(pooled)
-                
-#                 # 合并卷积特征和原始特征
-#                 conv_concat = torch.cat(conv_features, dim=1)
-#                 combined_features = torch.cat([conv_concat, x], dim=1)
-                
-#                 # 最终预测
-#                 output = self.fc(combined_features)
-#                 return output.squeeze()
+                return x.squeeze()
         
-#         self.model = CNNRankingModel(
-#             self.input_dim, self.sequence_length, self.conv_channels,
-#             self.kernel_sizes, self.hidden_dims, self.dropout_rate
-#         )
+        return TransformerRankingModel(input_dim, self.d_model, self.nhead, 
+                                     self.num_layers, self.dim_feedforward, 
+                                     self.dropout_rate).to(self.device)
     
-#     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 100):
-#         """训练模型"""
-#         X_scaled = self.scaler.fit_transform(X)
-#         X_tensor = torch.FloatTensor(X_scaled).to(self.device)
-#         y_tensor = torch.FloatTensor(y).to(self.device)
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        n_features = X.shape[1]
+        self.model = self._build_model(n_features)
         
-#         self.model.train()
+        self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
+        self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
         
-#         for epoch in range(epochs):
-#             epoch_loss = 0.0
-#             num_batches = 0
-            
-#             unique_groups = np.unique(groups)
-#             for group_id in unique_groups:
-#                 group_mask = groups == group_id
-#                 group_X = X_tensor[group_mask]
-#                 group_y = y_tensor[group_mask]
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+        
+        dataset = FastRankingDataset(X, y, groups, max_group_size=20)
+        dataloader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=0)
+        
+        self.model.train()
+        for epoch in range(30):
+            for batch_groups in dataloader:
+                batch_loss = 0
+                valid_batches = 0
                 
-#                 if len(group_X) < 2:
-#                     continue
-                
-#                 # 前向传播
-#                 scores = self.model(group_X)
-                
-#                 # 计算ranking loss
-#                 if torch.sum(group_y) == 1:  # 只有一个正样本
-#                     target_idx = torch.argmax(group_y)
-#                     loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
-#                 else:
-#                     # 使用pairwise ranking loss
-#                     pos_mask = group_y > 0
-#                     neg_mask = group_y == 0
+                for group_X, group_y in batch_groups:
+                    if len(group_X) < 2:
+                        continue
                     
-#                     if pos_mask.sum() > 0 and neg_mask.sum() > 0:
-#                         pos_scores = scores[pos_mask].mean()
-#                         neg_scores = scores[neg_mask].mean()
-#                         loss = F.relu(1.0 - (pos_scores - neg_scores))
-#                     else:
-#                         continue
-                
-#                 if loss > 0:
-#                     self.optimizer.zero_grad()
-#                     loss.backward()
-#                     self.optimizer.step()
+                    group_X_scaled = (group_X - self.scaler_mean) / self.scaler_std
+                    scores = self.model(group_X_scaled)
+                    if scores.dim() == 0:
+                        scores = scores.unsqueeze(0)
                     
-#                     epoch_loss += loss.item()
-#                     num_batches += 1
-            
-#             if (epoch + 1) % 20 == 0 and num_batches > 0:
-#                 avg_loss = epoch_loss / num_batches
-#                 self.logger.info(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
+                    if torch.sum(group_y) == 1:
+                        target_idx = torch.argmax(group_y)
+                        loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
+                    else:
+                        pos_mask = group_y > 0
+                        neg_mask = group_y == 0
+                        if pos_mask.sum() > 0 and neg_mask.sum() > 0:
+                            pos_scores = scores[pos_mask].mean()
+                            neg_scores = scores[neg_mask].mean()
+                            loss = F.relu(1.0 - (pos_scores - neg_scores))
+                        else:
+                            continue
+                    
+                    batch_loss += loss
+                    valid_batches += 1
+                
+                if valid_batches > 0:
+                    batch_loss = batch_loss / valid_batches
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    self.optimizer.step()
         
-#         self.is_fitted = True
-#         self.logger.info("CNNRanker训练完成")
+        self.is_fitted = True
     
-#     def predict(self, X: np.ndarray) -> np.ndarray:
-#         """预测分数"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练")
+    def predict(self, X: np.ndarray, groups: np.ndarray = None) -> np.ndarray:
+        self.model.eval()
+        all_scores = np.zeros(len(X))
         
-#         self.model.eval()
-#         with torch.no_grad():
-#             X_scaled = self.scaler.transform(X)
-#             X_tensor = torch.FloatTensor(X_scaled).to(self.device)
-#             scores = self.model(X_tensor).cpu().numpy()
+        with torch.no_grad():
+            if groups is not None:
+                unique_groups = np.unique(groups)
+                for group_id in unique_groups:
+                    group_mask = groups == group_id
+                    group_X = X[group_mask]
+                    
+                    if len(group_X) == 0:
+                        continue
+                    
+                    X_tensor = torch.FloatTensor(group_X).to(self.device)
+                    X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
+                    scores = self.model(X_scaled)
+                    
+                    if scores.dim() == 0:
+                        scores = scores.unsqueeze(0)
+                    
+                    all_scores[group_mask] = scores.cpu().numpy()
+            else:
+                batch_size = 5000
+                for i in range(0, len(X), batch_size):
+                    batch_X = X[i:i+batch_size]
+                    X_tensor = torch.FloatTensor(batch_X).to(self.device)
+                    X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
+                    scores = self.model(X_scaled)
+                    all_scores[i:i+batch_size] = scores.cpu().numpy()
         
-#         return scores
+        return all_scores
     
-#     def save_model(self, filepath: str):
-#         """保存模型"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练，无法保存")
-#         joblib.dump(self, filepath)
+    def save_model(self, filepath: str):
+        torch.save({
+            'model_state': self.model.state_dict(),
+            'scaler_mean': self.scaler_mean,
+            'scaler_std': self.scaler_std,
+            'd_model': self.d_model,
+            'nhead': self.nhead,
+            'num_layers': self.num_layers,
+            'dim_feedforward': self.dim_feedforward,
+            'dropout_rate': self.dropout_rate,
+            'learning_rate': self.learning_rate,
+            'is_fitted': self.is_fitted
+        }, filepath)
     
-#     @classmethod
-#     def load_model(cls, filepath: str):
-#         """加载模型"""
-#         return joblib.load(filepath)
+    @classmethod
+    def load_model(cls, filepath: str):
+        checkpoint = torch.load(filepath, map_location='cpu')
+        instance = cls(
+            d_model=checkpoint['d_model'],
+            nhead=checkpoint['nhead'],
+            num_layers=checkpoint['num_layers'],
+            dim_feedforward=checkpoint['dim_feedforward'],
+            dropout_rate=checkpoint['dropout_rate'],
+            learning_rate=checkpoint['learning_rate']
+        )
+        n_features = checkpoint['scaler_mean'].shape[0]
+        instance.model = instance._build_model(n_features)
+        instance.model.load_state_dict(checkpoint['model_state'])
+        instance.scaler_mean = checkpoint['scaler_mean']
+        instance.scaler_std = checkpoint['scaler_std']
+        instance.is_fitted = checkpoint['is_fitted']
+        return instance
 
 
-# class TransformerRanker:
-#     """Transformer排名模型 - 处理序列依赖关系"""
-    
-#     def __init__(self, input_dim: int, d_model: int = 128, nhead: int = 8,
-#                  num_layers: int = 3, dim_feedforward: int = 512,
-#                  dropout_rate: float = 0.1, learning_rate: float = 0.001,
-#                  use_gpu: bool = True, random_state: int = 42, logger=None):
-#         self.input_dim = input_dim
-#         self.d_model = d_model
-#         self.nhead = nhead
-#         self.num_layers = num_layers
-#         self.dim_feedforward = dim_feedforward
-#         self.dropout_rate = dropout_rate
-#         self.learning_rate = learning_rate
-#         self.use_gpu = use_gpu and torch.cuda.is_available()
-#         self.logger = logger or logging.getLogger(__name__)
-#         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-#         self.is_fitted = False
+# CNNRanker 添加缺失的类
+class CNNRanker:
+    def __init__(self, input_dim: int = None, sequence_length: int = 10,
+                 conv_channels: List[int] = [64, 128], kernel_sizes: List[int] = [3, 5],
+                 hidden_dims: List[int] = [256, 128], dropout_rate: float = 0.2,
+                 learning_rate: float = 0.001, use_gpu: bool = True, 
+                 random_state: int = 42, logger=None):
+        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        self.logger = logger or logging.getLogger(__name__)
+        self.is_fitted = False
         
-#         # 构建网络
-#         self._build_network()
-#         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-#         self.scaler = StandardScaler()
-        
-#         if self.use_gpu:
-#             self.model = self.model.to(self.device)
-#             self.logger.info("TransformerRanker GPU加速可用")
+        self.model = None
+        self.sequence_length = sequence_length
+        self.conv_channels = conv_channels
+        self.kernel_sizes = kernel_sizes
+        self.hidden_dims = hidden_dims
+        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
+        self.optimizer = None
+        self.scaler_mean = None
+        self.scaler_std = None
     
-#     def _build_network(self):
-#         """构建Transformer网络"""
-#         class TransformerRankingModel(nn.Module):
-#             def __init__(self, input_dim, d_model, nhead, num_layers, 
-#                         dim_feedforward, dropout_rate):
-#                 super().__init__()
+    def _build_model(self, input_dim):
+        class CNNRankingModel(nn.Module):
+            def __init__(self, input_dim, sequence_length, conv_channels, kernel_sizes, 
+                        hidden_dims, dropout_rate):
+                super().__init__()
                 
-#                 # 输入投影
-#                 self.input_projection = nn.Linear(input_dim, d_model)
+                # 重塑输入为序列
+                self.input_dim = input_dim
+                self.sequence_length = sequence_length
+                self.features_per_step = input_dim // sequence_length
                 
-#                 # Transformer编码器
-#                 encoder_layer = nn.TransformerEncoderLayer(
-#                     d_model=d_model,
-#                     nhead=nhead,
-#                     dim_feedforward=dim_feedforward,
-#                     dropout=dropout_rate,
-#                     batch_first=True
-#                 )
-#                 self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
+                # 卷积层
+                self.conv_layers = nn.ModuleList()
+                in_channels = 1
+                for out_channels in conv_channels:
+                    self.conv_layers.append(
+                        nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1)
+                    )
+                    in_channels = out_channels
                 
-#                 # 输出层
-#                 self.output_layer = nn.Sequential(
-#                     nn.Linear(d_model, d_model // 2),
-#                     nn.ReLU(),
-#                     nn.Dropout(dropout_rate),
-#                     nn.Linear(d_model // 2, 1)
-#                 )
+                # 全连接层
+                conv_output_size = conv_channels[-1] * self.features_per_step
+                layers = []
+                prev_dim = conv_output_size
+                
+                for hidden_dim in hidden_dims:
+                    layers.extend([
+                        nn.Linear(prev_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Dropout(dropout_rate)
+                    ])
+                    prev_dim = hidden_dim
+                
+                layers.append(nn.Linear(prev_dim, 1))
+                self.fc_layers = nn.Sequential(*layers)
             
-#             def forward(self, x, mask=None):
-#                 # 输入投影
-#                 x = self.input_projection(x)
+            def forward(self, x):
+                batch_size = x.size(0)
                 
-#                 # Transformer编码
-#                 x = self.transformer(x, src_key_padding_mask=mask)
+                # 重塑为序列格式
+                x = x.view(batch_size, 1, -1)
                 
-#                 # 输出预测
-#                 x = self.output_layer(x)
-#                 return x.squeeze(-1)
+                # 卷积操作
+                for conv in self.conv_layers:
+                    x = F.relu(conv(x))
+                
+                # 展平
+                x = x.view(batch_size, -1)
+                
+                # 全连接层
+                x = self.fc_layers(x)
+                
+                return x.squeeze()
         
-#         self.model = TransformerRankingModel(
-#             self.input_dim, self.d_model, self.nhead, 
-#             self.num_layers, self.dim_feedforward, self.dropout_rate
-#         )
+        return CNNRankingModel(input_dim, self.sequence_length, self.conv_channels, 
+                              self.kernel_sizes, self.hidden_dims, self.dropout_rate).to(self.device)
     
-#     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 100):
-#         """训练模型"""
-#         X_scaled = self.scaler.fit_transform(X)
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        n_features = X.shape[1]
+        self.model = self._build_model(n_features)
         
-#         self.model.train()
+        self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
+        self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
         
-#         for epoch in range(epochs):
-#             epoch_loss = 0.0
-#             num_batches = 0
-            
-#             unique_groups = np.unique(groups)
-#             for group_id in unique_groups:
-#                 group_mask = groups == group_id
-#                 group_X = X_scaled[group_mask]
-#                 group_y = y[group_mask]
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+        dataset = FastRankingDataset(X, y, groups, max_group_size=30)
+        dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0)
+        
+        self.model.train()
+        for epoch in range(30):
+            for batch_groups in dataloader:
+                batch_loss = 0
+                valid_batches = 0
                 
-#                 if len(group_X) < 2:
-#                     continue
-                
-#                 # 转换为tensor并添加序列维度
-#                 group_X_tensor = torch.FloatTensor(group_X).unsqueeze(0).to(self.device)
-#                 group_y_tensor = torch.FloatTensor(group_y).to(self.device)
-                
-#                 # 前向传播
-#                 scores = self.model(group_X_tensor).squeeze(0)
-                
-#                 # 计算ranking loss
-#                 if torch.sum(group_y_tensor) == 1:  # 只有一个正样本
-#                     target_idx = torch.argmax(group_y_tensor)
-#                     loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
-#                 else:
-#                     # 使用pairwise ranking loss
-#                     pos_mask = group_y_tensor > 0
-#                     neg_mask = group_y_tensor == 0
+                for group_X, group_y in batch_groups:
+                    if len(group_X) < 2:
+                        continue
                     
-#                     if pos_mask.sum() > 0 and neg_mask.sum() > 0:
-#                         pos_scores = scores[pos_mask].mean()
-#                         neg_scores = scores[neg_mask].mean()
-#                         loss = F.relu(1.0 - (pos_scores - neg_scores))
-#                     else:
-#                         continue
-                
-#                 if loss > 0:
-#                     self.optimizer.zero_grad()
-#                     loss.backward()
-#                     self.optimizer.step()
+                    group_X_scaled = (group_X - self.scaler_mean) / self.scaler_std
+                    scores = self.model(group_X_scaled)
                     
-#                     epoch_loss += loss.item()
-#                     num_batches += 1
-            
-#             if (epoch + 1) % 20 == 0 and num_batches > 0:
-#                 avg_loss = epoch_loss / num_batches
-#                 self.logger.info(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
-        
-#         self.is_fitted = True
-#         self.logger.info("TransformerRanker训练完成")
-    
-#     def predict(self, X: np.ndarray, groups: np.ndarray) -> np.ndarray:
-#         """预测分数"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练")
-        
-#         self.model.eval()
-#         X_scaled = self.scaler.transform(X)
-#         all_scores = np.zeros(len(X))
-        
-#         with torch.no_grad():
-#             unique_groups = np.unique(groups)
-#             for group_id in unique_groups:
-#                 group_mask = groups == group_id
-#                 group_X = X_scaled[group_mask]
+                    if torch.sum(group_y) == 1:
+                        target_idx = torch.argmax(group_y)
+                        loss = F.cross_entropy(scores.unsqueeze(0), target_idx.unsqueeze(0))
+                    else:
+                        pos_mask = group_y > 0
+                        neg_mask = group_y == 0
+                        if pos_mask.sum() > 0 and neg_mask.sum() > 0:
+                            pos_scores = scores[pos_mask].mean()
+                            neg_scores = scores[neg_mask].mean()
+                            loss = F.relu(1.0 - (pos_scores - neg_scores))
+                        else:
+                            continue
+                    
+                    batch_loss += loss
+                    valid_batches += 1
                 
-#                 if len(group_X) == 0:
-#                     continue
-                
-#                 # 转换为tensor并添加序列维度
-#                 group_X_tensor = torch.FloatTensor(group_X).unsqueeze(0).to(self.device)
-#                 scores = self.model(group_X_tensor).squeeze(0).cpu().numpy()
-#                 all_scores[group_mask] = scores
+                if valid_batches > 0:
+                    batch_loss = batch_loss / valid_batches
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    self.optimizer.step()
         
-#         return all_scores
+        self.is_fitted = True
     
-#     def save_model(self, filepath: str):
-#         """保存模型"""
-#         if not self.is_fitted:
-#             raise ValueError("模型未训练，无法保存")
-#         joblib.dump(self, filepath)
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        self.model.eval()
+        batch_size = 10000
+        all_scores = []
+        
+        with torch.no_grad():
+            for i in range(0, len(X), batch_size):
+                batch_X = X[i:i+batch_size]
+                X_tensor = torch.FloatTensor(batch_X).to(self.device)
+                X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
+                scores = self.model(X_scaled).cpu().numpy()
+                all_scores.append(scores)
+        
+        return np.concatenate(all_scores)
     
-#     @classmethod
-#     def load_model(cls, filepath: str):
-#         """加载模型"""
-#         return joblib.load(filepath)
+    def save_model(self, filepath: str):
+        torch.save({
+            'model_state': self.model.state_dict(),
+            'scaler_mean': self.scaler_mean,
+            'scaler_std': self.scaler_std,
+            'sequence_length': self.sequence_length,
+            'conv_channels': self.conv_channels,
+            'kernel_sizes': self.kernel_sizes,
+            'hidden_dims': self.hidden_dims,
+            'dropout_rate': self.dropout_rate,
+            'learning_rate': self.learning_rate,
+            'is_fitted': self.is_fitted
+        }, filepath)
+    
+    @classmethod
+    def load_model(cls, filepath: str):
+        checkpoint = torch.load(filepath, map_location='cpu')
+        instance = cls(
+            sequence_length=checkpoint['sequence_length'],
+            conv_channels=checkpoint['conv_channels'],
+            kernel_sizes=checkpoint['kernel_sizes'],
+            hidden_dims=checkpoint['hidden_dims'],
+            dropout_rate=checkpoint['dropout_rate'],
+            learning_rate=checkpoint['learning_rate']
+        )
+        n_features = checkpoint['scaler_mean'].shape[0]
+        instance.model = instance._build_model(n_features)
+        instance.model.load_state_dict(checkpoint['model_state'])
+        instance.scaler_mean = checkpoint['scaler_mean']
+        instance.scaler_std = checkpoint['scaler_std']
+        instance.is_fitted = checkpoint['is_fitted']
+        return instance

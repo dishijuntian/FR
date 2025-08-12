@@ -1,0 +1,54 @@
+# 训练模块配置
+# FlightRankingTrainer, FlightRankingModelsManager 使用
+
+# 基础训练配置
+segments: [0, 1, 2]
+model_names: ['XGBRanker', 'LGBMRanker']
+use_gpu: true
+random_state: 42
+epochs: 20
+validation_split: 0.3
+
+# 模型参数配置
+model_configs:
+  XGBRanker:
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.05
+    
+  LGBMRanker:
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.05
+    
+  RankNet:
+    hidden_dims: [128, 64, 32]
+    learning_rate: 0.001
+    dropout_rate: 0.2
+
+# 特征选择器配置 (FeatureSelector)
+feature_selection:
+  enabled: true
+  max_features: 100
+  selection_methods: ['importance', 'statistical']
+  variance_threshold: 0.0
+  correlation_threshold: 0.98
+  importance_method: 'lightgbm'
+  statistical_method: 'mutual_info'
+  sample_size: 100000
+  preserve_categorical: true
+  handle_missing_as_feature: true
+  allow_low_variance_bool: true
+
+# 评估配置
+evaluation:
+  primary_metric: "hitrate_at_3"
+  hitrate_k: 3
+
+# 模型管理
+model_management:
+  save_feature_selector: true
+  save_feature_names: true
+  save_model_configs: true
+  best_models_config_file: "best_models_config.json"
+  training_report_file: "training_report.json"

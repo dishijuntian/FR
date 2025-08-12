@@ -1,5 +1,5 @@
-# 增强版航班排名系统配置文件
-# 集成深度特征工程和智能特征选择
+# 航班排名系统配置文件 - 适配更新后的训练预测模块
+# 集成特征选择器和智能模型管理
 
 # 路径配置
 paths:
@@ -9,22 +9,22 @@ paths:
   output_dir: "data/aeroclub-recsys-2025/submissions"
   log_dir: "logs"
 
-# 数据处理配置
+# 数据处理配置 - 适配DataProcessor
 data_processing:
-  chunk_size: 200000
-  n_processes: null # null=自动检测CPU核数
+  chunk_size: 300000      # 增加默认chunk_size，适配内存优化
+  n_processes: null       # null=自动检测CPU核数
   force_encode: false
   force_segment: false
   force_feature: true
   verify_results: true
   force_reprocess: false
   
-  # 特征工程配置
+  # 特征工程配置 - 适配DataEngineering
   feature_engineering:
     enabled: true
     
-    # 基础特征类型
-    basic_feature_types:
+    # 基础特征类型 - 对应DataEngineering中的方法
+    feature_types:
       - core           # 核心特征（价格、时间、舱位等）
       - route          # 路线特征
       - time           # 时间特征
@@ -33,148 +33,32 @@ data_processing:
       - passenger      # 乘客特征
       - interaction    # 基础交互特征
     
-    # 增强特征工程
+    # 是否启用交互特征
+    enable_interactions: true
+    
+    # 增强特征工程配置
     enhanced_features:
       enabled: true
       types:
         - economic     # 经济学特征
         - behavioral   # 行为经济学特征
-        - operational  # 运营特征
-        - customer     # 客户细分特征
-        - market       # 市场动态特征
-        - temporal     # 时间序列特征
-        - network      # 网络结构特征
-        - competitive  # 竞争态势特征
-        - anomaly      # 异常检测特征
-        - meta         # 元特征
-      max_features: 300
-      
-    # 自动特征发现
-    auto_discovery:
-      enabled: true
-      max_features: 50
-      methods:
-        - arithmetic   # 算术组合特征
-        - conditional  # 条件特征
-        - ranking      # 排名特征
-        - aggregation  # 聚合特征
-    
-  # 特征选择配置
-  feature_selection:
-    enabled: true
-    strategy: "adaptive" # adaptive, manual, disabled
-    
-    # 自适应特征选择（推荐）
-    adaptive_config:
-      enabled: true
-      max_features_ratio: 0.3  # 最大特征数占比
-      min_features: 50
-      max_features: 500
-      auto_adjust_by_data_size: true
-    
-    # 手动特征选择配置
-    manual_config:
       max_features: 200
-      selection_methods:
-        - variance      # 方差过滤
-        - correlation   # 相关性过滤  
-        - importance    # 重要性选择
-        - statistical   # 统计方法选择
-        - univariate    # 单变量选择
       
-      # 过滤阈值
-      variance_threshold: 0.01
-      correlation_threshold: 0.95
-      
-      # 重要性方法配置
-      importance_method: "lightgbm" # lightgbm, random_forest, lasso
-      statistical_method: "mutual_info" # mutual_info, f_test, chi2
-      
-      # 采样配置
-      sample_size: 50000
-      early_stopping: true
-      save_feature_importance: true
-      
-      # 集成策略
-      ensemble_selection: true
-      voting_threshold: 0.5 # 特征被选中的最小投票比例
+    # 自动特征发现配置
+    auto_discovery:
+      enabled: false    # 默认关闭，避免特征过多
+      max_features: 50
 
-# 优化训练配置
+# 训练配置 - 适配FlightRankingTrainer
 training:
-  segments: [0, 1, 2]
-  model_names: ['XGBRanker', 'LGBMRanker']
+  segments: [0, 1, 2]  # 训练的数据段
+  model_names: ['XGBRanker', 'LGBMRanker', 'RankNet']  # 候选模型
   use_gpu: true
   random_state: 42
+  epochs: 100          # 深度学习模型的训练轮数
+  validation_split: 0.2  # 验证集比例
   
-  # 特征工程相关的训练配置
-  feature_engineering_in_training:
-    # 是否在训练时动态创建特征
-    dynamic_features: false
-    
-    # 是否使用特征重要性进行在线筛选
-    online_feature_selection: true
-    online_selection_rounds: 3
-    
-    # 是否启用特征交互发现
-    auto_interaction_discovery: false
-
-# 自动数据集划分策略
-auto_split_strategy:
-  thresholds:
-    1000: 3   # ≤1000个ranker: 2折
-    2000: 3   # ≤2000个ranker: 3折  
-    5000: 3   # ≤5000个ranker: 5折
-    10000: 3  # ≤10000个ranker: 8折
-    99999999: 3 # >10000个ranker: 10折
-
-# 验证集大小调整策略  
-validation_size_strategy:
-  small_data_threshold: 100
-  small_data_val_size: 0.3
-  large_data_threshold: 10000
-  large_data_val_size: 0.1
-  default_val_size: 0.2
-
-# 快速训练策略
-fast_training:
-  enabled: true
-  epochs:
-    validation: 5
-    final: 10
-  early_stopping:
-    enabled: true
-    patience: 3
-    min_delta: 0.001
-
-# 内存优化
-memory_optimization:
-  clear_cache: true
-  optimize_dtypes: true
-  batch_processing: false
-  
-  # 特征工程相关的内存优化
-  feature_engineering_memory:
-    # 分批处理特征工程
-    batch_feature_engineering: true
-    batch_size: 100000
-    
-    # 中间结果缓存策略
-    cache_intermediate_features: false
-    cleanup_after_selection: true
-
-# 模型参数配置
-model_configs:
-  XGBRanker:
-    n_estimators: 200
-    max_depth: 8
-    learning_rate: 0.05
-    
-  LGBMRanker:
-    n_estimators: 200
-    max_depth: 8
-    learning_rate: 0.05
-    
-  # 模型参数配置 
+  # 模型参数配置 - 对应每个模型的初始化参数
   model_configs:
     XGBRanker:
       n_estimators: 200
@@ -191,71 +75,207 @@ model_configs:
       learning_rate: 0.001
       dropout_rate: 0.2
 
-# 预测配置
+# 预测配置 - 适配FlightRankingPredictor  
 prediction:
-  segments: [0, 1, 2]
-  model_names: ['XGBRanker', 'LGBMRanker']
+  segments: [0, 1, 2]  # 预测的数据段
   use_gpu: true
-  enable_business_rules: false
   
-  # 集成权重配置 (根据验证性能自动调整)
-  ensemble_weights:
-    XGBRanker: 0.4
-    LGBMRanker: 0.4  
-    RankNet: 0.2
-    
   # 预测优化
   prediction_optimization:
     batch_size: 10000        # 预测批大小
     memory_efficient: true   # 内存高效模式
-    cache_predictions: false # 是否缓存中间预测结果
+    save_individual_results: true  # 保存各段的单独结果
 
-# 性能监控配置
-monitoring:
-  # 是否启用性能监控
+# Manager配置 - 适配FlightRankingModelsManager的特征选择器
+feature_selection:
+  # 特征选择器配置 - 对应FeatureSelector的config参数
   enabled: true
+  max_features: 40           # 目标特征数量（30-50个特征）
+  selection_methods: ['importance', 'statistical']  # 选择方法
+  variance_threshold: 0.0    # 方差阈值（保留低方差但有意义的特征）
+  correlation_threshold: 0.98  # 相关性阈值（允许一定程度的相关性）
+  importance_method: 'lightgbm'  # 重要性方法
+  statistical_method: 'mutual_info'  # 统计方法
+  sample_size: 30000         # 特征选择时的采样大小
   
-  # 监控指标
-  metrics:
-    - training_time
-    - memory_usage
-    - validation_score
-    - model_size
+  # 特殊数据适配配置
+  preserve_categorical: true      # 保留分类特征
+  handle_missing_as_feature: true # 将缺失值(-1)作为特征信息
+  allow_low_variance_bool: true   # 允许低方差的布尔特征
+
+# 评估配置
+evaluation:
+  # 主要评估指标 - 对应trainer中的HitRate@3
+  primary_metric: "hitrate_at_3"
+  
+  # HitRate@k配置
+  hitrate_k: 3               # 计算HitRate@k的k值
+  
+  # 模型选择策略
+  model_selection:
+    strategy: "best_validation"  # 基于验证集性能选择最佳模型
+    save_all_models: false      # 是否保存所有模型（否则只保存最佳模型）
+
+# 数据预处理配置 - 适配Manager.prepare_data方法
+data_preprocessing:
+  # 数据清理
+  remove_invalid_groups: true     # 移除无效的ranker组
+  
+  # 特征处理
+  feature_processing:
+    # 零方差特征处理 - 对应remove_zero_variance_features方法
+    remove_zero_variance: true
+    preserve_bool_categorical: true  # 保留布尔和分类特征
     
-  # 性能阈值告警
-  thresholds:
-    max_training_time: 1800    # 最大训练时间(秒)
-    max_memory_usage: 8192     # 最大内存使用(MB)
-    min_validation_score: 0.5  # 最小验证分数
+    # 缺失值处理
+    missing_value_strategy: "median"  # 数值特征用中位数填充
+    
+    # 数据类型优化
+    optimize_dtypes: true
 
-# 流水线配置
-pipeline:
-  run_data_processing: false
-  run_training: true
-  run_prediction: true
+# 模型保存和加载配置
+model_management:
+  # 保存配置
+  save_feature_selector: true     # 保存特征选择器配置
+  save_feature_names: true       # 保存特征名称列表
+  save_model_configs: true       # 保存模型配置
   
-  # 并行策略
-  parallel_strategy:
-    # GPU可用时使用单进程+GPU, CPU时使用多进程
-    auto_parallel: true
-    max_workers: null  # null=自动检测
+  # 加载配置
+  validate_on_load: true         # 加载后验证模型
+  
+  # 最佳模型配置文件
+  best_models_config_file: "best_models_config.json"
+  training_report_file: "training_report.json"
 
-# 日志配置
+# 内存和性能优化 - 适配Core.py中的内存监控
+performance:
+  # GPU配置
+  gpu_settings:
+    auto_detect: true            # 自动检测GPU可用性
+    fallback_to_cpu: true       # GPU失败时回退到CPU
+    
+  # 内存优化 - 适配FlightRankingCore
+  memory_optimization:
+    clear_cache_between_segments: true  # 段间清理缓存
+    optimize_data_types: true         # 优化数据类型
+    use_float32: true                 # 使用float32而非float64
+    force_gc_after_stages: true       # 各阶段后强制垃圾回收
+    memory_warning_threshold: 90      # 内存使用警告阈值(%)
+    min_available_memory_gb: 2.0      # torch加载前最小可用内存
+    
+  # 并行处理 - 适配DataProcessor和DataSegment
+  parallel_processing:
+    n_jobs: -1                   # 并行任务数（-1表示使用所有CPU）
+    batch_processing: true       # 批处理模式
+    chunk_size_auto_adjust: true # 根据内存自动调整chunk_size
+
+# 数据分割配置 - 适配DataSegment
+data_segmentation:
+  # 分割方法配置
+  pre_classification: true         # 预先分类ranker_id
+  use_row_groups: true            # 使用parquet行组优化
+  max_workers_segment: 8          # 分割时最大进程数
+  
+  # 验证配置
+  verify_integrity: true          # 验证数据完整性
+  skip_train_verification: true   # 跳过train数据验证（只警告）
+  
+  # 输出优化
+  remove_constant_columns: true   # 移除恒定值列
+  sort_by_id: true               # 按ID排序输出
+
+# 日志配置 - 适配Core.py的日志设置
 logging:
   level: "INFO"
-  format: "%(asctime)s | %(levelname)8s | %(name)s | %(message)s"
+  format: "%(asctime)s - %(levelname)s - %(message)s"  # 简化格式匹配Core.py
   datefmt: "%Y-%m-%d %H:%M:%S"
+  
+  # 文件日志
+  file_logging:
+    enabled: true
+    filename_pattern: "flight_ranking_{timestamp}.log"  # 匹配Core.py中的模式
+    encoding: "utf-8"
   
   # 详细日志选项
   detailed_logging:
-    model_training: true     # 详细记录模型训练过程
-    data_processing: true   # 数据处理详细日志
-    memory_monitoring: true  # 内存监控日志
-    performance_metrics: true # 性能指标日志
+    model_training: true         # 详细记录模型训练过程
+    feature_selection: true     # 特征选择详细日志
+    data_preprocessing: true    # 数据预处理详细日志
+    model_evaluation: true      # 模型评估详细日志
+    prediction_process: true    # 预测过程详细日志
+    memory_monitoring: true     # 内存监控日志
+    
+# 特征工程详细配置 - 适配DataEngineering的方法
+feature_engineering_advanced:
+  # 核心特征配置
+  core_features:
+    price_features: true          # 价格特征
+    duration_features: true       # 持续时间特征
+    trip_type_features: true      # 行程类型特征
+    segment_count_features: true  # 航班段数特征
+    
+  # 经济学特征配置
+  economic_features:
+    price_elasticity: true        # 价格弹性特征
+    time_value_analysis: true     # 时间价值特征
+    booking_behavior: true        # 预订行为特征
+    market_analysis: true         # 市场分析特征
+    
+  # 行为学特征配置
+  behavioral_features:
+    choice_overload: true         # 选择过载特征
+    loss_aversion: true           # 损失厌恶特征
+    social_proof: true            # 社会认同特征
+    cognitive_bias: true          # 认知偏差特征
+    
+  # 自动特征发现配置
+  auto_discovery_advanced:
+    statistical_features: true    # 统计特征
+    clustering_features: false   # 聚类特征（需要sklearn）
+    binning_features: true       # 分箱特征
+    combination_features: true   # 组合特征
+    variance_threshold: 0.01     # 方差阈值
 
-# 实验追踪配置
-experiment_tracking:
-  enabled: false
-  # 如果启用，可以集成MLflow等工具
-  backend: "mlflow"  
-  experiment_name: "flight_ranking_optimized"
+# 实验和报告配置
+reporting:
+  # 训练报告
+  training_reports:
+    generate_detailed_report: true    # 生成详细训练报告
+    include_feature_importance: true  # 包含特征重要性
+    include_model_comparison: true    # 包含模型对比
+    
+  # 预测报告  
+  prediction_reports:
+    generate_prediction_report: true  # 生成预测报告
+    include_segment_stats: true      # 包含各段统计
+    include_model_usage: true       # 包含模型使用情况
+
+# 流水线控制
+pipeline:
+  run_data_processing: false    # 是否运行数据处理
+  run_training: true           # 是否运行训练
+  run_prediction: true         # 是否运行预测
+  
+  # 错误处理
+  error_handling:
+    continue_on_segment_failure: true  # 单段失败时继续其他段
+    min_successful_segments: 1         # 最少成功段数
+    
+  # 自动清理
+  auto_cleanup:
+    clear_intermediate_files: false   # 清理中间文件
+    keep_best_models_only: true      # 只保留最佳模型
+
+# 调试和开发配置
+debug:
+  enabled: false               # 调试模式
+  save_intermediate_data: false  # 保存中间数据
+  verbose_feature_selection: false  # 特征选择详细输出
+  profile_performance: false   # 性能分析
+  
+  # 快速测试配置
+  quick_test:
+    enabled: false             # 快速测试模式
+    max_samples_per_segment: 10000  # 每段最大样本数
+    epochs: 5                  # 减少训练轮数
+    max_features: 20           # 减少特征数

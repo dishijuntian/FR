@@ -1,0 +1,52 @@
+# 数据处理模块配置
+# DataProcessor, DataEncode, DataSegment, DataEngineering 使用
+
+# DataProcessor 配置
+chunk_size: 300000
+n_processes: null  # null=自动检测CPU核数
+force_encode: false
+force_segment: false
+force_feature: true
+verify_results: true
+force_reprocess: false
+
+# DataEncode 配置
+data_encoding:
+  use_sequential: true      # 使用单进程处理
+  optimize_dtypes: true
+  hash_strings: true        # 字符串哈希编码
+  missing_value: -1         # 缺失值标记
+
+# DataSegment 配置
+data_segmentation:
+  pre_classification: true  # 预先分类ranker_id
+  max_workers: 8           # 最大进程数
+  verify_integrity: true   # 验证完整性
+  skip_train_verify: true  # 跳过train验证
+
+# DataEngineering 配置
+feature_engineering:
+  enabled: true
+  
+  # 基础特征类型
+  feature_types:
+    - core
+    - route
+    - time
+    - ranker
+    - carrier
+    - passenger
+    - interaction
+  
+  # 增强特征
+  enhanced_features:
+    enabled: true
+    types:
+      - economic
+      - behavioral
+    max_features: 200
+  
+  # 自动特征发现
+  auto_discovery:
+    enabled: false
+    max_features: 50
