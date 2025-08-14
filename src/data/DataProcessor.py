@@ -1,6 +1,5 @@
 """
 数据处理流水线：编码 + 特征工程 + 分割
-更新版本，适配新的特征工程模块
 """
 import os
 import logging
@@ -10,16 +9,16 @@ from multiprocessing import cpu_count
 from typing import Dict, List, Optional
 from pathlib import Path
 
-from src.data.DataEncode import DataEncode
-from src.data.DataSegment import DataSegment
-from src.data.DataEngineering import DataEngineering
-from src.utils.Common import timer
-from src.utils.FileUtils import FileUtils
-from src.utils.MemoryUtils import MemoryUtils
+from data.DataEncode import DataEncode
+from data.DataSegment import DataSegment
+from data.DataEngineering import DataEngineering
+from utils.Common import timer
+from utils.FileUtils import FileUtils
+from utils.MemoryUtils import MemoryUtils
 
 
 class DataProcessor:
-    """数据处理流水线 - 优化版"""
+    """数据处理流水线"""
     
     def __init__(self, base_dir: str = "data/aeroclub-recsys-2025", 
                  chunk_size: int = 200000, n_processes: Optional[int] = None,
@@ -33,7 +32,7 @@ class DataProcessor:
         
         # 设置路径
         self.encoded_dir = self.base_dir / "encoded"
-        self.segment_dir = self.base_dir / "segmented"
+        self.segment_dir = self.base_dir / "segmented"  # 直接输出按组大小分割的文件
         self.processed_dir = self.base_dir / "processed"
         
         # 创建目录
@@ -96,7 +95,7 @@ class DataProcessor:
     
     @timer
     def segment_data(self, data_type: str, force: bool = False, verify: bool = True) -> bool:
-        """分割数据"""
+        """分割数据（直接按组大小分类）"""
         input_file = self.encoded_dir / data_type / f"{data_type}_encoded.parquet"
         output_dir = self.segment_dir / data_type
         
@@ -104,6 +103,7 @@ class DataProcessor:
             self.logger.error(f"编码文件不存在: {input_file}")
             return False
         
+        # 检查按组大小分割的输出文件
         output_files = self.segmenter.get_output_files(data_type, str(output_dir))
         if all(os.path.exists(f) for f in output_files) and not force:
             self.logger.info(f"分割文件已存在，跳过")
@@ -118,7 +118,7 @@ class DataProcessor:
             input_info = FileUtils.get_file_info(input_file)
             self.logger.info(f"输入: {input_info['rows']:,} 行, {input_info['size_mb']:.1f}MB")
             
-            # 执行分割
+            # 执行分割（包含按组大小分类）
             segment_results = self.segmenter.process_file(
                 input_file=str(input_file),
                 data_type=data_type,
@@ -131,14 +131,17 @@ class DataProcessor:
                 return False
             
             # 验证结果
-            total_segmented = sum(segment_results.values())
+            total_segmented = sum(sum(groups.values()) for groups in segment_results.values())
             duration = datetime.now() - start_time
             
             self.logger.info(f"分割完成，总计: {total_segmented:,} 行，耗时: {duration}")
             for level in [3, 2, 1, 0]:
-                count = segment_results.get(level, 0)
-                if count > 0:
-                    self.logger.info(f"  Segment {level}: {count:,} 行")
+                level_total = sum(segment_results[level].values())
+                if level_total > 0:
+                    self.logger.info(f"  Segment {level}: {level_total:,} 行")
+                    for group_cat, rows in segment_results[level].items():
+                        if rows > 0:
+                            self.logger.info(f"    {group_cat}: {rows:,} 行")
             
             if verify:
                 verification_result = self.segmenter.verify_segmentation(str(input_file), str(output_dir), data_type)
@@ -158,23 +161,34 @@ class DataProcessor:
     @timer
     def engineer_features(self, data_type: str, force: bool = False) -> bool:
         """特征工程阶段"""
-        # 检查是否启用特征工程
+        # 检查是否可用特征工程
         feature_config = self.config.get('feature_engineering', {})
         if not feature_config.get('enabled', True):
             self.logger.info("特征工程已禁用，跳过")
             return True
         
+        # 输入为按组大小分割的文件
         input_dir = self.segment_dir / data_type
         output_dir = self.processed_dir / data_type
         
         # 检查输入文件是否存在
-        segment_files = [input_dir / f"{data_type}_segment_{level}.parquet" for level in [0, 1, 2, 3]]
+        segment_files = []
+        for level in [0, 1, 2, 3]:
+            for group_category in ['small', 'medium', 'big']:
+                segment_file = input_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                segment_files.append(segment_file)
+        
         if not any(f.exists() for f in segment_files):
             self.logger.error(f"分割文件不存在: {input_dir}")
             return False
         
-        # 检查输出文件是否已存在
-        output_files = [output_dir / f"{data_type}_segment_{level}.parquet" for level in [0, 1, 2, 3]]
+        # 检查输出文件是否已存在（按组大小分割的文件）
+        output_files = []
+        for level in [0, 1, 2, 3]:
+            for group_category in ['small', 'medium', 'big']:
+                output_file = output_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                output_files.append(output_file)
+        
         if all(f.exists() for f in output_files) and not force:
             self.logger.info(f"特征工程文件已存在，跳过: {output_dir}")
             return True
@@ -321,12 +335,14 @@ class DataProcessor:
     def _all_outputs_exist(self) -> bool:
         """检查所有输出是否存在"""
         for data_type in ['train', 'test']:
-            # 检查特征工程后的文件
+            # 检查特征工程后的文件（按组大小分割）
             output_dir = self.processed_dir / data_type
-            output_files = [
-                output_dir / f"{data_type}_segment_{level}.parquet" 
-                for level in [0, 1, 2, 3]
-            ]
+            output_files = []
+            for level in [0, 1, 2, 3]:
+                for group_category in ['small', 'medium', 'big']:
+                    output_file = output_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                    output_files.append(output_file)
+            
             if not all(f.exists() for f in output_files):
                 return False
         return True
@@ -344,21 +360,23 @@ class DataProcessor:
             # 验证特征工程文件（简单检查存在性和非空）
             feature_dir = self.processed_dir / data_type
             for level in [0, 1, 2, 3]:
-                feature_file = feature_dir / f"{data_type}_segment_{level}.parquet"
-                if feature_file.exists():
-                    try:
-                        df = pd.read_parquet(feature_file)
-                        if len(df) > 0:
-                            # 检查是否有新增特征
-                            segment_file = self.segment_dir / data_type / f"{data_type}_segment_{level}.parquet"
-                            if segment_file.exists():
-                                df_original = pd.read_parquet(segment_file)
-                                if df.shape[1] <= df_original.shape[1]:
-                                    self.logger.warning(f"特征工程文件未增加特征: {feature_file}")
-                                    return False
-                    except Exception as e:
-                        self.logger.error(f"验证特征工程文件失败 {feature_file}: {str(e)}")
-                        return False
+                for group_category in ['small', 'medium', 'big']:
+                    feature_file = feature_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                    if feature_file.exists():
+                        try:
+                            df = pd.read_parquet(feature_file)
+                            if len(df) > 0:
+                                # 检查是否有新增特征
+                                original_file = self.segment_dir / data_type / f"{data_type}_segment_{level}_{group_category}.parquet"
+                                
+                                if original_file.exists():
+                                    df_original = pd.read_parquet(original_file)
+                                    if df.shape[1] <= df_original.shape[1]:
+                                        self.logger.warning(f"特征工程文件未增加特征: {feature_file}")
+                                        return False
+                        except Exception as e:
+                            self.logger.error(f"验证特征工程文件失败 {feature_file}: {str(e)}")
+                            return False
         return True
     
     def _log_final_stats(self):
@@ -372,18 +390,24 @@ class DataProcessor:
                 info = FileUtils.get_file_info(encoded_file)
                 self.logger.info(f"  编码文件: {info['rows']:,} 行, {info['size_mb']:.1f}MB")
             
-            # 分割文件统计
+            # 分割文件统计（按组）
             segment_dir = self.segment_dir / data_type
             segment_total_rows, segment_total_size = 0, 0
             
             for level in [0, 1, 2, 3]:
-                segment_file = segment_dir / f"{data_type}_segment_{level}.parquet"
-                if segment_file.exists():
-                    info = FileUtils.get_file_info(segment_file)
-                    if info['rows'] > 0:
-                        self.logger.info(f"  Segment {level}: {info['rows']:,} 行, {info['size_mb']:.1f}MB")
-                        segment_total_rows += info['rows']
-                        segment_total_size += info['size_mb']
+                level_rows = 0
+                level_size = 0
+                for group_category in ['small', 'medium', 'big']:
+                    segment_file = segment_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                    if segment_file.exists():
+                        info = FileUtils.get_file_info(segment_file)
+                        level_rows += info['rows']
+                        level_size += info['size_mb']
+                
+                if level_rows > 0:
+                    self.logger.info(f"  Segment {level}: {level_rows:,} 行, {level_size:.1f}MB")
+                    segment_total_rows += level_rows
+                    segment_total_size += level_size
             
             self.logger.info(f"  分割总计: {segment_total_rows:,} 行, {segment_total_size:.1f}MB")
             
@@ -392,13 +416,22 @@ class DataProcessor:
             feature_total_rows, feature_total_size = 0, 0
             
             for level in [0, 1, 2, 3]:
-                feature_file = feature_dir / f"{data_type}_segment_{level}.parquet"
-                if feature_file.exists():
-                    info = FileUtils.get_file_info(feature_file)
-                    if info['rows'] > 0:
-                        self.logger.info(f"  Featured {level}: {info['rows']:,} 行, {info['size_mb']:.1f}MB, {info['columns']} 列")
-                        feature_total_rows += info['rows']
-                        feature_total_size += info['size_mb']
+                level_rows = 0
+                level_size = 0
+                level_cols = 0
+                
+                for group_category in ['small', 'medium', 'big']:
+                    feature_file = feature_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                    if feature_file.exists():
+                        info = FileUtils.get_file_info(feature_file)
+                        level_rows += info['rows']
+                        level_size += info['size_mb']
+                        level_cols = info['columns']  # 假设同一level的列数相同
+                
+                if level_rows > 0:
+                    self.logger.info(f"  Featured {level}: {level_rows:,} 行, {level_size:.1f}MB, {level_cols} 列")
+                    feature_total_rows += level_rows
+                    feature_total_size += level_size
             
             self.logger.info(f"  特征工程总计: {feature_total_rows:,} 行, {feature_total_size:.1f}MB")
     
@@ -414,10 +447,12 @@ class DataProcessor:
             segmented = all(os.path.exists(f) for f in segment_files)
             
             feature_dir = self.processed_dir / data_type
-            feature_files = [
-                feature_dir / f"{data_type}_segment_{level}.parquet" 
-                for level in [0, 1, 2, 3]
-            ]
+            feature_files = []
+            for level in [0, 1, 2, 3]:
+                for group_category in ['small', 'medium', 'big']:
+                    feature_file = feature_dir / f"{data_type}_segment_{level}_{group_category}.parquet"
+                    feature_files.append(feature_file)
+            
             featured = all(f.exists() for f in feature_files)
             
             # 验证状态

@@ -7,8 +7,8 @@ n_processes: null  # null=自动检测CPU核数
 force_encode: false
 force_segment: false
 force_feature: true
-verify_results: true
-force_reprocess: false
+verify_results: false
+force_reprocess: true
 
 # DataEncode 配置
 data_encoding:
@@ -40,7 +40,7 @@ feature_engineering:
   
   # 增强特征
   enhanced_features:
-    enabled: true
+    enabled: false
     types:
       - economic
       - behavioral

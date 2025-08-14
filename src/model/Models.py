@@ -11,8 +11,8 @@ import xgboost as xgb
 import lightgbm as lgb
 
 
-
 class FastRankingDataset(Dataset):
+    """快速排序数据集"""
     def __init__(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, max_group_size: int = 50):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -42,98 +42,150 @@ class FastRankingDataset(Dataset):
 
 
 class XGBoostRanker:
-    def __init__(self, n_estimators=100, max_depth=6, learning_rate=0.1, 
+    """XGBoost排序模型"""
+    def __init__(self, n_estimators=200, max_depth=6, learning_rate=0.1, 
+                 subsample=0.8, colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0,
                  use_gpu=True, random_state=42, logger=None):
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.logger = logger or logging.getLogger(__name__)
         self.is_fitted = False
         
-        # XGBoost参数
         self.params = {
             'objective': 'rank:pairwise',
             'eval_metric': 'ndcg',
             'eta': learning_rate,
             'max_depth': max_depth,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
+            'subsample': subsample,
+            'colsample_bytree': colsample_bytree,
+            'reg_alpha': reg_alpha,
+            'reg_lambda': reg_lambda,
             'seed': random_state,
             'verbosity': 0
         }
         
-        # GPU配置
         if self.use_gpu:
             self.params.update({
                 'tree_method': 'gpu_hist',
                 'gpu_id': 0
             })
-            if self.logger:
-                self.logger.info("XGBoost using GPU acceleration")
         else:
             self.params['tree_method'] = 'hist'
         
         self.n_estimators = n_estimators
         self.model = None
-        self.feature_names = None
+        self.early_stopping_rounds = 20
+    
+    def _convert_groups_to_sizes(self, groups: np.ndarray) -> List[int]:
+        """将组ID数组转换为组大小列表"""
+        unique_groups, counts = np.unique(groups, return_counts=True)
+        # 按组ID在数据中的出现顺序排序，确保组大小顺序正确
+        group_order = []
+        seen_groups = set()
+        for group_id in groups:
+            if group_id not in seen_groups:
+                group_order.append(group_id)
+                seen_groups.add(group_id)
+        
+        # 按出现顺序获取组大小
+        group_sizes = []
+        for group_id in group_order:
+            group_size = np.sum(groups == group_id)
+            group_sizes.append(int(group_size))
+        
+        return group_sizes
     
     def _prepare_data(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
         """准备XGBoost训练数据"""
-        unique_groups = np.unique(groups)
-        group_sizes = []
-        
-        for group_id in unique_groups:
-            group_size = np.sum(groups == group_id)
-            group_sizes.append(group_size)
+        group_sizes = self._convert_groups_to_sizes(groups)
         
         dtrain = xgb.DMatrix(X, label=y)
         dtrain.set_group(group_sizes)
         
         return dtrain, group_sizes
     
-    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, 
+            early_stopping_rounds=None, eval_set=None, eval_group=None):
         """训练XGBoost排序模型"""
         try:
-            self.logger.info(f"Training XGBoost with {len(X)} samples, GPU: {self.use_gpu}")
-            
             dtrain, group_sizes = self._prepare_data(X, y, groups)
             
-            self.model = xgb.train(
-                self.params,
-                dtrain,
-                num_boost_round=self.n_estimators,
-                verbose_eval=False
-            )
+            evals = []
+            if eval_set is not None and len(eval_set) > 0:
+                X_val, y_val = eval_set[0]
+                
+                # 正确处理验证集的组信息
+                if eval_group is not None and len(eval_group) > 0:
+                    val_groups = eval_group[0]
+                    val_group_sizes = self._convert_groups_to_sizes(val_groups)
+                else:
+                    # 如果没有提供验证集组信息，记录警告并跳过验证
+                    if self.logger:
+                        self.logger.warning("验证集组信息缺失，跳过早停验证")
+                    val_group_sizes = None
+                
+                if val_group_sizes is not None:
+                    dval = xgb.DMatrix(X_val, label=y_val)
+                    dval.set_group(val_group_sizes)
+                    evals = [(dtrain, 'train'), (dval, 'val')]
+                else:
+                    evals = [(dtrain, 'train')]
+            else:
+                evals = [(dtrain, 'train')]
+            
+            early_stopping = early_stopping_rounds or self.early_stopping_rounds
+            
+            # 只有在有验证集时才启用早停
+            if len(evals) > 1:
+                self.model = xgb.train(
+                    self.params,
+                    dtrain,
+                    num_boost_round=self.n_estimators,
+                    evals=evals,
+                    early_stopping_rounds=early_stopping,
+                    verbose_eval=False
+                )
+            else:
+                self.model = xgb.train(
+                    self.params,
+                    dtrain,
+                    num_boost_round=self.n_estimators,
+                    evals=evals,
+                    verbose_eval=False
+                )
             
             self.is_fitted = True
-            self.logger.info("XGBoost training completed")
+            if self.logger:
+                self.logger.info("XGBoost训练完成")
             
         except Exception as e:
-            self.logger.error(f"XGBoost training failed: {e}")
+            if self.logger:
+                self.logger.error(f"XGBoost训练失败: {e}")
             raise e
     
     def predict(self, X: np.ndarray) -> np.ndarray:
         """预测排序分数"""
         if not self.is_fitted or self.model is None:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         
         try:
             dtest = xgb.DMatrix(X)
             predictions = self.model.predict(dtest)
             return predictions
-            
         except Exception as e:
-            self.logger.error(f"XGBoost prediction failed: {e}")
+            if self.logger:
+                self.logger.error(f"XGBoost预测失败: {e}")
             raise e
     
     def get_feature_importance(self) -> dict:
         """获取特征重要性"""
         if not self.is_fitted or self.model is None:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         return self.model.get_score(importance_type='weight')
     
     def save_model(self, filepath: str):
         """保存模型"""
         if not self.is_fitted:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         
         model_data = {
             'model': self.model,
@@ -142,7 +194,6 @@ class XGBoostRanker:
             'is_fitted': self.is_fitted,
             'use_gpu': self.use_gpu
         }
-        
         joblib.dump(model_data, filepath)
     
     @classmethod
@@ -163,99 +214,134 @@ class XGBoostRanker:
 
 
 class LightGBMRanker:
-    def __init__(self, n_estimators=100, max_depth=6, learning_rate=0.1,
+    """LightGBM排序模型"""
+    def __init__(self, n_estimators=200, max_depth=6, learning_rate=0.1,
+                 subsample=0.8, colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0,
                  use_gpu=True, random_state=42, logger=None):
-
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.logger = logger or logging.getLogger(__name__)
         self.is_fitted = False
         
-        # LightGBM参数
         self.params = {
             'objective': 'lambdarank',
             'metric': 'ndcg',
             'boosting_type': 'gbdt',
             'num_leaves': 2 ** max_depth - 1,
             'learning_rate': learning_rate,
-            'feature_fraction': 0.8,
-            'bagging_fraction': 0.8,
+            'feature_fraction': colsample_bytree,
+            'bagging_fraction': subsample,
             'bagging_freq': 5,
+            'reg_alpha': reg_alpha,
+            'reg_lambda': reg_lambda,
             'seed': random_state,
             'verbosity': -1,
             'force_col_wise': True
         }
         
-        # GPU配置
         if self.use_gpu:
             self.params.update({
                 'device': 'gpu',
                 'gpu_platform_id': 0,
                 'gpu_device_id': 0
             })
-            if self.logger:
-                self.logger.info("LightGBM using GPU acceleration")
         
         self.n_estimators = n_estimators
         self.model = None
+        self.early_stopping_rounds = 20
+    
+    def _convert_groups_to_sizes(self, groups: np.ndarray) -> List[int]:
+        """将组ID数组转换为组大小列表"""
+        unique_groups, counts = np.unique(groups, return_counts=True)
+        # 按组ID在数据中的出现顺序排序
+        group_order = []
+        seen_groups = set()
+        for group_id in groups:
+            if group_id not in seen_groups:
+                group_order.append(group_id)
+                seen_groups.add(group_id)
+        
+        # 按出现顺序获取组大小
+        group_sizes = []
+        for group_id in group_order:
+            group_size = np.sum(groups == group_id)
+            group_sizes.append(int(group_size))
+        
+        return group_sizes
     
     def _prepare_data(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
         """准备LightGBM训练数据"""
-        unique_groups = np.unique(groups)
-        group_sizes = []
-        
-        for group_id in unique_groups:
-            group_size = np.sum(groups == group_id)
-            group_sizes.append(group_size)
+        group_sizes = self._convert_groups_to_sizes(groups)
         
         train_data = lgb.Dataset(X, label=y, group=group_sizes)
-        
         return train_data, group_sizes
     
-    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray,
+            early_stopping_rounds=None, eval_set=None, eval_group=None):
         """训练LightGBM排序模型"""
         try:
-            self.logger.info(f"Training LightGBM with {len(X)} samples, GPU: {self.use_gpu}")
-            
             train_data, group_sizes = self._prepare_data(X, y, groups)
+            
+            valid_sets = [train_data]
+            if eval_set is not None and len(eval_set) > 0:
+                X_val, y_val = eval_set[0]
+                
+                if eval_group is not None and len(eval_group) > 0:
+                    val_groups = eval_group[0]
+                    val_group_sizes = self._convert_groups_to_sizes(val_groups)
+                    
+                    val_data = lgb.Dataset(X_val, label=y_val, group=val_group_sizes, reference=train_data)
+                    valid_sets.append(val_data)
+                else:
+                    if self.logger:
+                        self.logger.warning("验证集组信息缺失，跳过早停验证")
+            
+            early_stopping = early_stopping_rounds or self.early_stopping_rounds
+            
+            callbacks = [lgb.log_evaluation(0)]
+            if len(valid_sets) > 1:
+                callbacks.append(lgb.early_stopping(early_stopping, verbose=False))
             
             self.model = lgb.train(
                 self.params,
                 train_data,
                 num_boost_round=self.n_estimators,
-                callbacks=[lgb.log_evaluation(0)]
+                valid_sets=valid_sets,
+                callbacks=callbacks
             )
             
             self.is_fitted = True
-            self.logger.info("LightGBM training completed")
+            if self.logger:
+                self.logger.info("LightGBM训练完成")
             
         except Exception as e:
-            self.logger.error(f"LightGBM training failed: {e}")
+            if self.logger:
+                self.logger.error(f"LightGBM训练失败: {e}")
             raise e
     
     def predict(self, X: np.ndarray) -> np.ndarray:
         """预测排序分数"""
         if not self.is_fitted or self.model is None:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         
         try:
             predictions = self.model.predict(X)
             return predictions
-            
         except Exception as e:
-            self.logger.error(f"LightGBM prediction failed: {e}")
+            if self.logger:
+                self.logger.error(f"LightGBM预测失败: {e}")
             raise e
     
     def get_feature_importance(self) -> dict:
         """获取特征重要性"""
         if not self.is_fitted or self.model is None:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         importances = self.model.feature_importance(importance_type='gain')
         return {f'f{i}': imp for i, imp in enumerate(importances)}
     
     def save_model(self, filepath: str):
         """保存模型"""
         if not self.is_fitted:
-            raise ValueError("Model not trained")
+            raise ValueError("模型未训练")
         
         model_data = {
             'model': self.model,
@@ -264,7 +350,6 @@ class LightGBMRanker:
             'is_fitted': self.is_fitted,
             'use_gpu': self.use_gpu
         }
-        
         joblib.dump(model_data, filepath)
     
     @classmethod
@@ -284,10 +369,13 @@ class LightGBMRanker:
         return instance
 
 
+# 神经网络模型保持不变，因为它们不需要处理组大小问题
 class RankNet:
+    """RankNet神经网络排序模型"""
     def __init__(self, input_dim: int = None, hidden_dims: List[int] = [256, 128],
-                 dropout_rate: float = 0.2, learning_rate: float = 0.001,
-                 use_gpu: bool = True, random_state: int = 42, logger=None):
+                 dropout_rate: float = 0.3, learning_rate: float = 0.001,
+                 weight_decay: float = 1e-4, use_gpu: bool = True, 
+                 random_state: int = 42, logger=None):
         self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         self.logger = logger or logging.getLogger(__name__)
         self.is_fitted = False
@@ -296,11 +384,13 @@ class RankNet:
         self.hidden_dims = hidden_dims
         self.dropout_rate = dropout_rate
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.optimizer = None
         self.scaler_mean = None
         self.scaler_std = None
     
     def _build_model(self, input_dim):
+        """构建RankNet模型"""
         layers = []
         prev_dim = input_dim
         
@@ -313,24 +403,46 @@ class RankNet:
             prev_dim = hidden_dim
         
         layers.append(nn.Linear(prev_dim, 1))
-        return nn.Sequential(*layers).to(self.device)
+        
+        model = nn.Sequential(*layers).to(self.device)
+        
+        # 权重初始化
+        for layer in model:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+        
+        return model
     
-    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 100):
+    def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, epochs: int = 50):
+        """训练RankNet模型"""
         n_features = X.shape[1]
         self.model = self._build_model(n_features)
         
+        # 数据标准化
         self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
         self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), 
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay
+        )
+        
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode='min', factor=0.5, patience=10, verbose=False
+        )
         
         dataset = FastRankingDataset(X, y, groups, max_group_size=35)
         dataloader = DataLoader(dataset, batch_size=24, shuffle=True, num_workers=0)
         
         self.model.train()
-        max_epochs = min(epochs, 40)
+        max_epochs = min(epochs, 50)
         
         for epoch in range(max_epochs):
+            epoch_loss = 0.0
+            num_batches = 0
+            
             for batch_groups in dataloader:
                 batch_loss = 0
                 valid_batches = 0
@@ -342,7 +454,7 @@ class RankNet:
                     group_X_scaled = (group_X - self.scaler_mean) / self.scaler_std
                     scores = self.model(group_X_scaled).squeeze()
                     
-                    # 简化的pairwise loss
+                    # 生成对比样本对
                     indices = torch.arange(len(group_X), device=self.device)
                     if len(indices) > 20:
                         indices = indices[torch.randperm(len(indices))[:20]]
@@ -373,11 +485,25 @@ class RankNet:
                     batch_loss = batch_loss / valid_batches
                     self.optimizer.zero_grad()
                     batch_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()
+                    
+                    epoch_loss += batch_loss.item()
+                    num_batches += 1
+            
+            if num_batches > 0:
+                avg_loss = epoch_loss / num_batches
+                scheduler.step(avg_loss)
         
         self.is_fitted = True
+        if self.logger:
+            self.logger.info("RankNet训练完成")
     
     def predict(self, X: np.ndarray) -> np.ndarray:
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("模型未训练")
+        
         self.model.eval()
         batch_size = 10000
         all_scores = []
@@ -388,11 +514,17 @@ class RankNet:
                 X_tensor = torch.FloatTensor(batch_X).to(self.device)
                 X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
                 scores = self.model(X_scaled).squeeze().cpu().numpy()
+                if scores.ndim == 0:
+                    scores = np.array([scores])
                 all_scores.append(scores)
         
         return np.concatenate(all_scores)
     
     def save_model(self, filepath: str):
+        """保存模型"""
+        if not self.is_fitted:
+            raise ValueError("模型未训练")
+        
         torch.save({
             'model_state': self.model.state_dict(),
             'scaler_mean': self.scaler_mean,
@@ -400,27 +532,34 @@ class RankNet:
             'hidden_dims': self.hidden_dims,
             'dropout_rate': self.dropout_rate,
             'learning_rate': self.learning_rate,
+            'weight_decay': self.weight_decay,
             'is_fitted': self.is_fitted
         }, filepath)
     
     @classmethod
     def load_model(cls, filepath: str):
+        """加载模型"""
         checkpoint = torch.load(filepath, map_location='cpu')
+        
         instance = cls(
             hidden_dims=checkpoint['hidden_dims'],
             dropout_rate=checkpoint['dropout_rate'],
-            learning_rate=checkpoint['learning_rate']
+            learning_rate=checkpoint['learning_rate'],
+            weight_decay=checkpoint.get('weight_decay', 1e-4)
         )
+        
         n_features = checkpoint['scaler_mean'].shape[0]
         instance.model = instance._build_model(n_features)
         instance.model.load_state_dict(checkpoint['model_state'])
         instance.scaler_mean = checkpoint['scaler_mean']
         instance.scaler_std = checkpoint['scaler_std']
         instance.is_fitted = checkpoint['is_fitted']
+        
         return instance
 
 
 class GraphRanker:
+    """图神经网络排序模型"""
     def __init__(self, input_dim: int = None, hidden_dims: List[int] = [128, 64], 
                  num_gnn_layers: int = 2, dropout_rate: float = 0.2,
                  learning_rate: float = 0.001, use_gpu: bool = True, 
@@ -439,6 +578,7 @@ class GraphRanker:
         self.scaler_std = None
     
     def _build_model(self, input_dim):
+        """构建图神经网络模型"""
         class SimpleGNN(nn.Module):
             def __init__(self, input_dim, hidden_dims, num_layers, dropout_rate):
                 super().__init__()
@@ -449,7 +589,9 @@ class GraphRanker:
                     self.layers.append(nn.Linear(prev_dim, hidden_dims[0]))
                     prev_dim = hidden_dims[0]
                 
-                self.attention = nn.MultiheadAttention(prev_dim, 4, dropout=dropout_rate, batch_first=True)
+                self.attention = nn.MultiheadAttention(
+                    prev_dim, num_heads=4, dropout=dropout_rate, batch_first=True
+                )
                 self.final = nn.Sequential(
                     nn.Linear(prev_dim, hidden_dims[-1]),
                     nn.ReLU(),
@@ -470,6 +612,7 @@ class GraphRanker:
         return SimpleGNN(input_dim, self.hidden_dims, self.num_gnn_layers, self.dropout_rate).to(self.device)
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        """训练图神经网络模型"""
         n_features = X.shape[1]
         self.model = self._build_model(n_features)
         
@@ -517,8 +660,14 @@ class GraphRanker:
                     self.optimizer.step()
         
         self.is_fitted = True
+        if self.logger:
+            self.logger.info("GraphRanker训练完成")
     
     def predict(self, X: np.ndarray, groups: np.ndarray = None) -> np.ndarray:
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("模型未训练")
+        
         self.model.eval()
         batch_size = 10000
         all_scores = []
@@ -534,6 +683,10 @@ class GraphRanker:
         return np.concatenate(all_scores)
     
     def save_model(self, filepath: str):
+        """保存模型"""
+        if not self.is_fitted:
+            raise ValueError("模型未训练")
+        
         torch.save({
             'model_state': self.model.state_dict(),
             'scaler_mean': self.scaler_mean,
@@ -547,23 +700,28 @@ class GraphRanker:
     
     @classmethod
     def load_model(cls, filepath: str):
+        """加载模型"""
         checkpoint = torch.load(filepath, map_location='cpu')
+        
         instance = cls(
             hidden_dims=checkpoint['hidden_dims'],
             num_gnn_layers=checkpoint['num_gnn_layers'],
             dropout_rate=checkpoint['dropout_rate'],
             learning_rate=checkpoint['learning_rate']
         )
+        
         n_features = checkpoint['scaler_mean'].shape[0]
         instance.model = instance._build_model(n_features)
         instance.model.load_state_dict(checkpoint['model_state'])
         instance.scaler_mean = checkpoint['scaler_mean']
         instance.scaler_std = checkpoint['scaler_std']
         instance.is_fitted = checkpoint['is_fitted']
+        
         return instance
 
 
 class TransformerRanker:
+    """Transformer排序模型"""
     def __init__(self, input_dim: int = None, d_model: int = 128, nhead: int = 4,
                  num_layers: int = 2, dim_feedforward: int = 256,
                  dropout_rate: float = 0.1, learning_rate: float = 0.001,
@@ -584,6 +742,7 @@ class TransformerRanker:
         self.scaler_std = None
     
     def _build_model(self, input_dim):
+        """构建Transformer模型"""
         class TransformerRankingModel(nn.Module):
             def __init__(self, input_dim, d_model, nhead, num_layers, 
                         dim_feedforward, dropout_rate):
@@ -617,18 +776,25 @@ class TransformerRanker:
                 
                 return x.squeeze()
         
-        return TransformerRankingModel(input_dim, self.d_model, self.nhead, 
-                                     self.num_layers, self.dim_feedforward, 
-                                     self.dropout_rate).to(self.device)
+        return TransformerRankingModel(
+            input_dim, self.d_model, self.nhead, 
+            self.num_layers, self.dim_feedforward, 
+            self.dropout_rate
+        ).to(self.device)
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        """训练Transformer模型"""
         n_features = X.shape[1]
         self.model = self._build_model(n_features)
         
         self.scaler_mean = torch.FloatTensor(X.mean(axis=0)).to(self.device)
         self.scaler_std = torch.FloatTensor(X.std(axis=0) + 1e-8).to(self.device)
         
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+        self.optimizer = optim.AdamW(
+            self.model.parameters(), 
+            lr=self.learning_rate, 
+            weight_decay=1e-4
+        )
         
         dataset = FastRankingDataset(X, y, groups, max_group_size=20)
         dataloader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=0)
@@ -672,8 +838,14 @@ class TransformerRanker:
                     self.optimizer.step()
         
         self.is_fitted = True
+        if self.logger:
+            self.logger.info("TransformerRanker训练完成")
     
     def predict(self, X: np.ndarray, groups: np.ndarray = None) -> np.ndarray:
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("模型未训练")
+        
         self.model.eval()
         all_scores = np.zeros(len(X))
         
@@ -707,6 +879,10 @@ class TransformerRanker:
         return all_scores
     
     def save_model(self, filepath: str):
+        """保存模型"""
+        if not self.is_fitted:
+            raise ValueError("模型未训练")
+        
         torch.save({
             'model_state': self.model.state_dict(),
             'scaler_mean': self.scaler_mean,
@@ -722,7 +898,9 @@ class TransformerRanker:
     
     @classmethod
     def load_model(cls, filepath: str):
+        """加载模型"""
         checkpoint = torch.load(filepath, map_location='cpu')
+        
         instance = cls(
             d_model=checkpoint['d_model'],
             nhead=checkpoint['nhead'],
@@ -731,17 +909,19 @@ class TransformerRanker:
             dropout_rate=checkpoint['dropout_rate'],
             learning_rate=checkpoint['learning_rate']
         )
+        
         n_features = checkpoint['scaler_mean'].shape[0]
         instance.model = instance._build_model(n_features)
         instance.model.load_state_dict(checkpoint['model_state'])
         instance.scaler_mean = checkpoint['scaler_mean']
         instance.scaler_std = checkpoint['scaler_std']
         instance.is_fitted = checkpoint['is_fitted']
+        
         return instance
 
 
-# CNNRanker 添加缺失的类
 class CNNRanker:
+    """CNN排序模型"""
     def __init__(self, input_dim: int = None, sequence_length: int = 10,
                  conv_channels: List[int] = [64, 128], kernel_sizes: List[int] = [3, 5],
                  hidden_dims: List[int] = [256, 128], dropout_rate: float = 0.2,
@@ -763,15 +943,15 @@ class CNNRanker:
         self.scaler_std = None
     
     def _build_model(self, input_dim):
+        """构建CNN模型"""
         class CNNRankingModel(nn.Module):
             def __init__(self, input_dim, sequence_length, conv_channels, kernel_sizes, 
                         hidden_dims, dropout_rate):
                 super().__init__()
                 
-                # 重塑输入为序列
                 self.input_dim = input_dim
                 self.sequence_length = sequence_length
-                self.features_per_step = input_dim // sequence_length
+                self.features_per_step = max(1, input_dim // sequence_length)
                 
                 # 卷积层
                 self.conv_layers = nn.ModuleList()
@@ -816,10 +996,13 @@ class CNNRanker:
                 
                 return x.squeeze()
         
-        return CNNRankingModel(input_dim, self.sequence_length, self.conv_channels, 
-                              self.kernel_sizes, self.hidden_dims, self.dropout_rate).to(self.device)
+        return CNNRankingModel(
+            input_dim, self.sequence_length, self.conv_channels, 
+            self.kernel_sizes, self.hidden_dims, self.dropout_rate
+        ).to(self.device)
     
     def fit(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray):
+        """训练CNN模型"""
         n_features = X.shape[1]
         self.model = self._build_model(n_features)
         
@@ -867,8 +1050,14 @@ class CNNRanker:
                     self.optimizer.step()
         
         self.is_fitted = True
+        if self.logger:
+            self.logger.info("CNNRanker训练完成")
     
     def predict(self, X: np.ndarray) -> np.ndarray:
+        """预测排序分数"""
+        if not self.is_fitted or self.model is None:
+            raise ValueError("模型未训练")
+        
         self.model.eval()
         batch_size = 10000
         all_scores = []
@@ -879,11 +1068,17 @@ class CNNRanker:
                 X_tensor = torch.FloatTensor(batch_X).to(self.device)
                 X_scaled = (X_tensor - self.scaler_mean) / self.scaler_std
                 scores = self.model(X_scaled).cpu().numpy()
+                if scores.ndim == 0:
+                    scores = np.array([scores])
                 all_scores.append(scores)
         
         return np.concatenate(all_scores)
     
     def save_model(self, filepath: str):
+        """保存模型"""
+        if not self.is_fitted:
+            raise ValueError("模型未训练")
+        
         torch.save({
             'model_state': self.model.state_dict(),
             'scaler_mean': self.scaler_mean,
@@ -899,7 +1094,9 @@ class CNNRanker:
     
     @classmethod
     def load_model(cls, filepath: str):
+        """加载模型"""
         checkpoint = torch.load(filepath, map_location='cpu')
+        
         instance = cls(
             sequence_length=checkpoint['sequence_length'],
             conv_channels=checkpoint['conv_channels'],
@@ -908,10 +1105,12 @@ class CNNRanker:
             dropout_rate=checkpoint['dropout_rate'],
             learning_rate=checkpoint['learning_rate']
         )
+        
         n_features = checkpoint['scaler_mean'].shape[0]
         instance.model = instance._build_model(n_features)
         instance.model.load_state_dict(checkpoint['model_state'])
         instance.scaler_mean = checkpoint['scaler_mean']
         instance.scaler_std = checkpoint['scaler_std']
         instance.is_fitted = checkpoint['is_fitted']
+        
         return instance

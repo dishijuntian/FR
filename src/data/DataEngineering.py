@@ -12,12 +12,12 @@ import pyarrow.parquet as pq
 import warnings
 warnings.filterwarnings('ignore')
 
-from src.utils.Common import timer
-from src.utils.MemoryUtils import MemoryUtils
+from utils.Common import timer
+from utils.MemoryUtils import MemoryUtils
 
 
 class DataEngineering:
-    """完整数据工程类 - 集成传统特征工程、增强特征工程和自动特征发现"""
+    """完整数据工程类"""
     
     def __init__(self, logger=None):
         self.logger = logger
@@ -210,7 +210,7 @@ class DataEngineering:
             df['price_pct_rank'] = df.groupby('ranker_id')['totalPrice_bin'].rank(pct=True)
             df['is_cheapest'] = (df['price_rank'] == 1).astype('int8')
             
-            # 价格偏离中位数
+            # 价格距离中位数
             median_price = df.groupby('ranker_id')['totalPrice_bin'].transform('median')
             std_price = df.groupby('ranker_id')['totalPrice_bin'].transform('std')
             df['price_from_median'] = (df['totalPrice_bin'] - median_price) / (std_price + 1)
@@ -896,7 +896,7 @@ class DataEngineering:
     def process_all_segments(self, input_dir: str, output_dir: str, 
                            data_type: str, feature_types: List[str] = None,
                            config: Dict = None) -> bool:
-        """处理所有segment文件"""
+        """处理所有segment文件，保持按组大小分割的格式"""
         input_dir = Path(input_dir)
         output_dir = Path(output_dir)
         
@@ -907,13 +907,14 @@ class DataEngineering:
         total_count = 0
         
         for segment_level in [0, 1, 2, 3]:
-            input_file = input_dir / f"{data_type}_segment_{segment_level}.parquet"
-            output_file = output_dir / f"{data_type}_segment_{segment_level}.parquet"
-            
-            total_count += 1
-            
-            if self.process_segment_file(str(input_file), str(output_file), feature_types, config):
-                success_count += 1
+            for group_category in ['small', 'medium', 'big']:        
+                input_file = input_dir / f"{data_type}_segment_{segment_level}_{group_category}.parquet"
+                output_file = output_dir / f"{data_type}_segment_{segment_level}_{group_category}.parquet"
+                
+                total_count += 1
+                
+                if self.process_segment_file(str(input_file), str(output_file), feature_types, config):
+                    success_count += 1
         
         if self.logger:
             self.logger.info(f"批处理完成: {success_count}/{total_count} 个文件成功")
@@ -944,4 +945,3 @@ class DataEngineering:
                 'compress_strings': True
             }
         }
-    

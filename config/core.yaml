@@ -17,8 +17,8 @@ module_configs:
 
 # 流水线控制
 pipeline:
-  run_data_processing: true
-  run_training: true
+  run_data_processing: false
+  run_training: false
   run_prediction: true
 
 # 日志配置

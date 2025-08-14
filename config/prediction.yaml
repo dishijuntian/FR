@@ -1,23 +1,53 @@
-# 预测模块配置
+# 预测模块配置 - 分段预测模式
 # FlightRankingPredictor 使用
 
 # 基础预测配置
-segments: [0, 1, 2]
 use_gpu: true
+
+# 路径配置
+paths:
+  model_input_dir: "./data"
+  model_save_dir: "./models"  # 将从子目录加载模型，如 models/segment_0_small/
+  output_dir: "./output"
 
 # 预测优化
 prediction_optimization:
   batch_size: 10000
   memory_efficient: true
-  save_individual_results: true
+  save_individual_results: true  # 为每个段保存单独的预测结果
 
 # 输出配置
 output:
   final_submission_file: "final_submission.csv"
-  individual_files: true
+  individual_files: true  # 保存每个段的单独结果文件
   generate_report: true
 
 # 错误处理
 error_handling:
-  continue_on_segment_failure: true
-  min_successful_segments: 1
+  continue_on_segment_failure: true  # 某个段预测失败时继续其他段
+  min_successful_segments: 1  # 最少成功预测的段数量
+  fallback_strategy: "random_ranking"  # 失败时的回退策略
+
+# 排名生成配置
+ranking:
+  use_gpu_ranking: true
+  fallback_to_cpu: true
+  validate_rankings: true
+
+# 数据验证配置
+validation:
+  check_required_columns: false
+  verify_group_completeness: true
+  validate_ranking_sequence: true
+
+# 分段预测特定配置
+segment_prediction:
+  load_model_on_demand: true  # 按需加载模型（节省内存）
+  parallel_segments: false    # 是否并行预测不同段（暂不支持）
+  model_cache_size: 2         # 最多缓存的模型数量
+  
+# 模型回退配置
+model_fallback:
+  enabled: true
+  default_model: "XGBoostRanker"  # 默认回退模型
+  fallback_order: ["XGBoostRanker", "LightGBMRanker", "RankNet"]  # 回退顺序

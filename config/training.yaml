@@ -1,41 +1,75 @@
-# 训练模块配置
+# 训练模块配置 - 分段训练模式
 # FlightRankingTrainer, FlightRankingModelsManager 使用
 
 # 基础训练配置
-segments: [0, 1, 2]
-model_names: ['XGBRanker', 'LGBMRanker']
+segments: [0, 1, 2]  # 数据段级别
+group_categories: ['small', 'medium', 'big']  # 组大小分类
+model_names: ['XGBoostRanker', 'LightGBMRanker']  # 'RankNet', 'GraphRanker', 'CNNRanker', 'TransformerRanker'
 use_gpu: true
-random_state: 42
-epochs: 20
-validation_split: 0.3
+random_state: 4201
+validation_split: 0.15  # 验证集比例
+early_stopping_rounds: 20
+
+# 路径配置
+paths:
+  model_input_dir: "./data"
+  model_save_dir: "./models"  # 模型将保存在子目录中，如 models/segment_0_small/
+  output_dir: "./output"
 
 # 模型参数配置
 model_configs:
-  XGBRanker:
+  XGBoostRanker:
     n_estimators: 200
     max_depth: 8
-    learning_rate: 0.05
+    learning_rate: 0.03
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
     
-  LGBMRanker:
+  LightGBMRanker:
     n_estimators: 200
     max_depth: 8
-    learning_rate: 0.05
+    learning_rate: 0.03
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
     
   RankNet:
     hidden_dims: [128, 64, 32]
     learning_rate: 0.001
     dropout_rate: 0.2
+    weight_decay: 1e-4
+
+  GraphRanker:
+    hidden_dims: [128, 64]
+    num_gnn_layers: 2
+    dropout_rate: 0.2
+    learning_rate: 0.001
+
+  CNNRanker:
+    sequence_length: 10
+    conv_channels: [64, 128]
+    hidden_dims: [256, 128]
+    dropout_rate: 0.2
+    learning_rate: 0.001
+
+  TransformerRanker:
+    d_model: 128
+    nhead: 4
+    num_layers: 2
+    dim_feedforward: 256
+    dropout_rate: 0.1
+    learning_rate: 0.001
 
 # 特征选择器配置 (FeatureSelector)
 feature_selection:
-  enabled: true
-  max_features: 100
-  selection_methods: ['importance', 'statistical']
+  enabled: false  # 为每个段独立进行特征选择
+  max_features: 80
   variance_threshold: 0.0
-  correlation_threshold: 0.98
-  importance_method: 'lightgbm'
-  statistical_method: 'mutual_info'
-  sample_size: 100000
+  correlation_threshold: 0.95
+  sample_size: 20000
   preserve_categorical: true
   handle_missing_as_feature: true
   allow_low_variance_bool: true
@@ -50,5 +84,12 @@ model_management:
   save_feature_selector: true
   save_feature_names: true
   save_model_configs: true
-  best_models_config_file: "best_models_config.json"
+  best_models_config_file: "best_models_config.json"  # 保存每个段的最佳模型
   training_report_file: "training_report.json"
+
+# 分段训练特定配置
+segment_training:
+  parallel_segments: false  # 是否并行训练不同段（暂不支持）
+  skip_missing_data: true   # 跳过缺失的数据文件
+  save_individual_models: true  # 为每个段保存独立的模型
+  validation_strategy: "group_split"  # 按组分割验证集

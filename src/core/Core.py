@@ -17,7 +17,7 @@ project_root = current_path.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 # 只导入数据处理相关模块，避免提前导入torch
-from src.data.DataProcessor import DataProcessor
+from data.DataProcessor import DataProcessor
 
 class FlightRankingCore:
     """航班排名系统核心控制器 - 模块化配置版本"""
@@ -113,7 +113,7 @@ class FlightRankingCore:
             # 检查内存情况
             self._check_memory_before_torch()
             
-            from src.model.Trainer import FlightRankingTrainer
+            from model.Trainer import FlightRankingTrainer
             
             # 合并核心配置和训练配置
             trainer_config = {
@@ -140,7 +140,7 @@ class FlightRankingCore:
         try:
             self.logger.info("开始初始化模型预测器...")
             
-            from src.model.Predictor import FlightRankingPredictor
+            from model.Predictor import FlightRankingPredictor
             
             # 合并核心配置和预测配置
             predictor_config = {
@@ -280,7 +280,7 @@ class FlightRankingCore:
             if not self._check_prediction_data(segments):
                 return False
             
-            results = self.model_predictor.predict_all_segments()
+            results = self.model_predictor.predict_all_files()
             
             # 预测完成后清理内存
             if self.core_config.get('memory_monitoring', {}).get('cleanup_between_stages', True):
